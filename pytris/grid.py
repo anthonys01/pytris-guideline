@@ -131,6 +131,9 @@ class Grid(pygame.sprite.Sprite):
         return new_cells_pos_to_return
 
     def clear_lines(self) -> int:
+        """
+            Clear full lines and return the number of cleared lines
+        """
         to_clear = []
         cleared = []
         for line in reversed(range(self.height)):
@@ -148,6 +151,13 @@ class Grid(pygame.sprite.Sprite):
                 cell.cell_type = Cell.EMPTY
         self.grid = cleared + self.grid
         return len(cleared)
+
+    def is_board_empty(self) -> bool:
+        for line in self.grid:
+            for cell in line:
+                if cell.cell_type != Cell.EMPTY:
+                    return False
+        return True
 
     def draw(self, surface):
         """

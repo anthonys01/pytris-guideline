@@ -82,7 +82,48 @@ class Tetromino(pygame.sprite.Sprite):
         ],
     }
 
+    # coordinates here are (Y, -X)
+    WALL_KICKS = [
+        {
+            1: [(0, 0), (-1, 0), (-1, 1), (0, -2), (-1, -2)],
+            3: [(0, 0), (1, 0), (1, 1), (0, -2), (1, -2)]
+        },
+        {
+            0: [(0, 0), (1, 0), (1, -1), (0, 2), (1, 2)],
+            2: [(0, 0), (1, 0), (1, -1), (0, 2), (1, 2)]
+        },
+        {
+            1: [(0, 0), (-1, 0), (-1, 1), (0, -2), (-1, -2)],
+            3: [(0, 0), (1, 0), (1, 1), (0, -2), (1, -2)]
+        },
+        {
+            2: [(0, 0), (-1, 0), (-1, -1), (0, 2), (-1, 2)],
+            0: [(0, 0), (-1, 0), (-1, -1), (0, 2), (-1, 2)]
+        }
+    ]
+
+    I_WALL_KICKS = [
+        {
+            1: [(0, 0), (-2, 0), (1, 0), (-2, -1), (1, 2)],
+            3: [(0, 0), (-1, 0), (2, 0), (-1, 2), (2, -1)]
+        },
+        {
+            0: [(0, 0), (2, 0), (-1, 0), (2, 1), (-1, -2)],
+            2: [(0, 0), (-1, 0), (2, 0), (-1, 2), (2, -1)]
+        },
+        {
+            1: [(0, 0), (1, 0), (-2, 2), (1, -2), (-2, 1)],
+            3: [(0, 0), (2, 0), (-1, 0), (2, 1), (-1, -2)]
+        },
+        {
+            2: [(0, 0), (-2, 0), (1, 0), (-2, -1), (1, 2)],
+            0: [(0, 0), (1, 0), (-2, 0), (1, -2), (-2, 1)]
+        }
+    ]
+
     MOVE_ROT = "rotation"
+    MOVE_KICK = "wall_kick"
+    MOVE_TST_KICK = "tst_fin_kick"
     MOVE_TRANS = "translation"
 
     ALLOWED_WIGGLES = 5
@@ -170,24 +211,52 @@ class Tetromino(pygame.sprite.Sprite):
         for i in range(4):
             new_cells.append((self.cells[i][0] - old_base[i][0] + new_base[i][0],
                               self.cells[i][1] - old_base[i][1] + new_base[i][1]))
-        for cell_pos in set(new_cells).difference(self.cells):
-            cell = self.grid.get_cell(cell_pos)
-            if cell is None or cell.cell_type != Cell.EMPTY:
-                # TODO SRS kicks
-                return
+        correct_mode = -1
+        kick_table = self.I_WALL_KICKS if self.piece_type == self.I_PIECE else self.WALL_KICKS
+        allowed_kicks = kick_table[self.rotation][new_rotation]
+        for mode in range(5):
+            correct = True
+            transposed_cells = [(cell_pos[0] - allowed_kicks[mode][1],
+                                 cell_pos[1] + allowed_kicks[mode][0]) for cell_pos in new_cells]
+            for cell_pos in set(transposed_cells).difference(self.cells):
+                cell = self.grid.get_cell(cell_pos)
+                if cell is None or cell.cell_type != Cell.EMPTY:
+                    correct = False
+                    break
+            if correct:
+                correct_mode = mode
+                new_cells = transposed_cells
+                break
+        if correct_mode == -1:
+            return
+
+        if correct_mode == 0:
+            self.last_move = self.MOVE_ROT
+        elif self.rotation == 0 or self.rotation == 2:
+            # possible TST or fin kicks
+            if correct_mode == 4:
+                self.last_move = self.MOVE_TST_KICK
+            else:
+                self.last_move = self.MOVE_KICK
+        else:
+            self.last_move = self.MOVE_KICK
+
         for cell in self.cells:
             self.grid.get_cell(cell).cell_type = Cell.EMPTY
         for cell in new_cells:
             self.grid.get_cell(cell).cell_type = self.CELL[self.piece_type]
         self.cells = new_cells
         self.rotation = new_rotation
-        self.last_move = self.MOVE_ROT
 
     def is_tspin(self) -> bool:
         """
         test if we have a tspin
+
+        we need a T-piece that was rotated or kicked
+        3 or its 4 corners need to be filled
+        and 2 of its front corners need to be filled (except for tst and fin kicks)
         """
-        if self.piece_type != self.T_PIECE or self.last_move != self.MOVE_ROT:
+        if self.piece_type != self.T_PIECE or self.last_move == self.MOVE_TRANS:
             return False
         center = self.cells[1]
         corners = [
@@ -201,10 +270,16 @@ class Tetromino(pygame.sprite.Sprite):
             cell = self.grid.get_cell(cell_pos)
             return cell is None or cell.cell_type != Cell.EMPTY
 
+        # 3 corners rule
         used = sum(_is_used(corner) for corner in corners)
         if used < 3:
             return False
 
+        if self.last_move == self.MOVE_TST_KICK:
+            # TST and fins are T-spins event without the 2 corners rule
+            return True
+
+        # 2 front corners rule
         if self.rotation == 0 and _is_used(corners[0]) and _is_used(corners[1]):
             return True
         if self.rotation == 1 and _is_used(corners[1]) and _is_used(corners[3]):
@@ -215,6 +290,31 @@ class Tetromino(pygame.sprite.Sprite):
             return True
 
         return False
+
+    def is_tspin_mini(self) -> bool:
+        """
+        test if we have a tspin mini
+
+        need a T piece that was kicked
+        3 of its 4 corners need to be filled
+        is not a T-spin (not tested, so this will return True also for T-spins)
+        """
+        if self.piece_type != self.T_PIECE or self.last_move != self.MOVE_KICK:
+            return False
+        center = self.cells[1]
+        corners = [
+            (center[0] - 1, center[1] - 1),
+            (center[0] - 1, center[1] + 1),
+            (center[0] + 1, center[1] - 1),
+            (center[0] + 1, center[1] + 1)
+        ]
+
+        def _is_used(cell_pos):
+            cell = self.grid.get_cell(cell_pos)
+            return cell is None or cell.cell_type != Cell.EMPTY
+
+        # 3 corners rule
+        return sum(_is_used(corner) for corner in corners) >= 3
 
     def _translate(self, pressed_keys):
         top = 0
