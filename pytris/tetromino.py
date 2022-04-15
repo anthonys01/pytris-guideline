@@ -190,11 +190,7 @@ class Tetromino(pygame.sprite.Sprite):
         return True
 
     def _is_on_top_of_something(self) -> bool:
-        for cell_pos in self.cells:
-            if cell_pos[0] == self.grid.height - 1 or \
-                    self.grid.get_cell((cell_pos[0] + 1, cell_pos[1])).cell_type != Cell.EMPTY:
-                return True
-        return False
+        return self.cells == self.grid.get_hd_pos(self.cells)
 
     @staticmethod
     def _get_max_height(*cells) -> int:

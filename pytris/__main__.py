@@ -40,49 +40,56 @@ if __name__ == "__main__":
     combo = 0
     back_2_back = 0
     text = ''
+    end = False
+    go_down = False
 
     while True:
         pygame.display.update()
         for event in pygame.event.get():
             if event.type == GRAVITY_TICK_EVENT:
-                t.go_down()
+                go_down = True
             if event.type == QUIT:
                 pygame.quit()
                 sys.exit()
 
-        if t.locked:
-            tspin = t.is_tspin()
-            mini = False if tspin else t.is_tspin_mini()
-            cleared = g.clear_lines()
-            perfect = g.is_board_empty()
-            if cleared:
-                if not tspin and cleared < 4:
-                    back_2_back = 0
-                text = (
-                    f"{'Perfect Clear ' if perfect else ''}"
-                    f"{'T-spin ' if tspin else ''}"
-                    f"{'T-spin mini ' if mini else ''}"
-                    f"{['Single', 'Double', 'Triple', 'Quad'][cleared - 1]}"
-                    f" {'Back-to-back ' + str(back_2_back) if back_2_back else ''}"
-                    f" {str(combo) + '-combo' if combo else ''}")
-                print(text)
-                if tspin or cleared == 4:
-                    back_2_back += 1
-                combo += 1
-            else:
-                if tspin:
-                    text = "T-spin"
-                combo = 0
-            t.set_next_from_queue()
-            if not t.spawn_piece():
-                text = "END"
+        if not end:
+            if t.locked:
+                tspin = t.is_tspin()
+                mini = False if tspin else t.is_tspin_mini()
+                cleared = g.clear_lines()
+                perfect = g.is_board_empty()
+                if cleared:
+                    if not tspin and cleared < 4:
+                        back_2_back = 0
+                    text = (
+                        f"{'Perfect Clear ' if perfect else ''}"
+                        f"{'T-spin ' if tspin else ''}"
+                        f"{'T-spin mini ' if mini else ''}"
+                        f"{['Single', 'Double', 'Triple', 'Quad'][cleared - 1]}"
+                        f" {'Back-to-back ' + str(back_2_back) if back_2_back else ''}"
+                        f" {str(combo) + '-combo' if combo else ''}")
+                    print(text)
+                    if tspin or cleared == 4:
+                        back_2_back += 1
+                    combo += 1
+                else:
+                    if tspin:
+                        text = "T-spin"
+                    combo = 0
+                t.set_next_from_queue()
+                if not t.spawn_piece():
+                    text = "END"
+                    end = True
+            elif go_down:
+                t.go_down()
+                go_down = False
 
-        t.update()
+            t.update()
 
-        display_surface.fill((150, 150, 150))
-        g.draw(display_surface)
-        t.draw(display_surface)
-        render_text(display_surface, text, begin_size[0] // 2, 30)
+            display_surface.fill((150, 150, 150))
+            g.draw(display_surface)
+            t.draw(display_surface)
+            render_text(display_surface, text, begin_size[0] // 2, 30)
 
         scaled = pygame.transform.smoothscale(display_surface, win.get_size())
         win.blit(scaled, (0, 0))
