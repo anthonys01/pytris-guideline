@@ -9,6 +9,7 @@ from pygame.locals import *
 
 from pytris.cell import Cell
 from pytris.grid import Grid
+from pytris.pieces import *
 
 HD_KEY = K_z
 SD_KEY = K_s
@@ -24,110 +25,17 @@ class Tetromino(pygame.sprite.Sprite):
     """
         Player controlled tetromino
     """
-    I_PIECE = 0
-    S_PIECE = 1
-    Z_PIECE = 2
-    L_PIECE = 3
-    J_PIECE = 4
-    O_PIECE = 5
-    T_PIECE = 6
 
     CELL = [1, 2, 3, 4, 5, 6, 7]
     SPAWN_POS = {
-        I_PIECE: [(1, 3), (1, 4), (1, 5), (1, 6)],
-        J_PIECE: [(0, 3), (1, 3), (1, 4), (1, 5)],
-        L_PIECE: [(1, 3), (1, 4), (1, 5), (0, 5)],
-        O_PIECE: [(0, 4), (1, 4), (0, 5), (1, 5)],
-        S_PIECE: [(1, 3), (1, 4), (0, 4), (0, 5)],
-        Z_PIECE: [(0, 3), (0, 4), (1, 4), (1, 5)],
-        T_PIECE: [(1, 3), (1, 4), (0, 4), (1, 5)]
+        I_PIECE: (1, 3),
+        J_PIECE: (0, 3),
+        L_PIECE: (0, 3),
+        O_PIECE: (0, 4),
+        S_PIECE: (0, 3),
+        Z_PIECE: (0, 3),
+        T_PIECE: (0, 3)
     }
-
-    PIECES_ROT = {
-        I_PIECE: [
-            [(0, 0), (0, 1), (0, 2), (0, 3)],
-            [(-1, 2), (0, 2), (1, 2), (2, 2)],
-            [(1, 3), (1, 2), (1, 1), (1, 0)],
-            [(2, 1), (1, 1), (0, 1), (-1, 1)],
-        ],
-        J_PIECE: [
-            [(0, 0), (1, 0), (1, 1), (1, 2)],
-            [(0, 2), (0, 1), (1, 1), (2, 1)],
-            [(2, 2), (1, 2), (1, 1), (1, 0)],
-            [(2, 0), (2, 1), (1, 1), (0, 1)],
-        ],
-        L_PIECE: [
-            [(1, 0), (1, 1), (1, 2), (0, 2)],
-            [(0, 1), (1, 1), (2, 1), (2, 2)],
-            [(1, 2), (1, 1), (1, 0), (2, 0)],
-            [(2, 1), (1, 1), (0, 1), (0, 0)],
-        ],
-        S_PIECE: [
-            [(1, 0), (1, 1), (0, 1), (0, 2)],
-            [(0, 1), (1, 1), (1, 2), (2, 2)],
-            [(1, 2), (1, 1), (2, 1), (2, 0)],
-            [(2, 1), (1, 1), (1, 0), (0, 0)],
-        ],
-        Z_PIECE: [
-            [(0, 0), (0, 1), (1, 1), (1, 2)],
-            [(0, 2), (1, 2), (1, 1), (2, 1)],
-            [(2, 2), (2, 1), (1, 1), (1, 0)],
-            [(2, 0), (1, 0), (1, 1), (0, 1)],
-        ],
-        T_PIECE: [
-            [(1, 0), (1, 1), (0, 1), (1, 2)],
-            [(0, 1), (1, 1), (1, 2), (2, 1)],
-            [(1, 2), (1, 1), (2, 1), (1, 0)],
-            [(2, 1), (1, 1), (1, 0), (0, 1)],
-        ],
-    }
-
-    # coordinates here are (Y, -X)
-    WALL_KICKS = [
-        {
-            1: [(0, 0), (-1, 0), (-1, 1), (0, -2), (-1, -2)],
-            3: [(0, 0), (1, 0), (1, 1), (0, -2), (1, -2)],
-            2: [(0, 0), (0, 1)]
-        },
-        {
-            0: [(0, 0), (1, 0), (1, -1), (0, 2), (1, 2)],
-            2: [(0, 0), (1, 0), (1, -1), (0, 2), (1, 2)],
-            3: [(0, 0), (1, 0)]
-        },
-        {
-            1: [(0, 0), (-1, 0), (-1, 1), (0, -2), (-1, -2)],
-            3: [(0, 0), (1, 0), (1, 1), (0, -2), (1, -2)],
-            0: [(0, 0), (0, -1)]
-        },
-        {
-            2: [(0, 0), (-1, 0), (-1, -1), (0, 2), (-1, 2)],
-            0: [(0, 0), (-1, 0), (-1, -1), (0, 2), (-1, 2)],
-            1: [(0, 0), (-1, 0)]
-        }
-    ]
-
-    I_WALL_KICKS = [
-        {
-            1: [(0, 0), (-2, 0), (1, 0), (-2, -1), (1, 2)],
-            3: [(0, 0), (-1, 0), (2, 0), (-1, 2), (2, -1)],
-            2: [(1, -1), (1, 0)]
-        },
-        {
-            0: [(0, 0), (2, 0), (-1, 0), (2, 1), (-1, -2)],
-            2: [(0, 0), (-1, 0), (2, 0), (-1, 2), (2, -1)],
-            3: [(-1, -1), (0, -1)]
-        },
-        {
-            1: [(0, 0), (1, 0), (-2, 2), (1, -2), (-2, 1)],
-            3: [(0, 0), (2, 0), (-1, 0), (2, 1), (-1, -2)],
-            0: [(-1, 1), (-1, 0)]
-        },
-        {
-            2: [(0, 0), (-2, 0), (1, 0), (-2, -1), (1, 2)],
-            0: [(0, 0), (1, 0), (-2, 0), (1, -2), (-2, 1)],
-            1: [(1, 1), (0, 1)]
-        }
-    ]
 
     MOVE_ROT = "rotation"
     MOVE_KICK = "wall_kick"
@@ -178,17 +86,23 @@ class Tetromino(pygame.sprite.Sprite):
         self.piece_nb += 1
         self.holt = False
 
+    def _get_spawn_cells(self, piece_type: int):
+        return [(self.SPAWN_POS[piece_type][0] + piece[0],
+                 self.SPAWN_POS[piece_type][1] + piece[1])
+                for piece in PIECES_ROT[piece_type][0]]
+
     def spawn_piece(self) -> bool:
         """
         Try to spawn the tetromino piece in the spawn area. Succeed iif all needed cells are empty
         :return: True if succeeded, False otherwise
         """
-        for pos in self.SPAWN_POS[self.piece_type]:
+        spawn_cells = self._get_spawn_cells(self.piece_type)
+        for pos in spawn_cells:
             if self.grid.get_cell(pos).cell_type != Cell.EMPTY:
                 return False
-        for pos in self.SPAWN_POS[self.piece_type]:
+        for pos in spawn_cells:
             self.grid.get_cell(pos).cell_type = self.CELL[self.piece_type]
-        self.cells = self.SPAWN_POS[self.piece_type]
+        self.cells = spawn_cells
         self.locked = False
         self.current_height = 1
         self.max_height = 1
@@ -205,37 +119,33 @@ class Tetromino(pygame.sprite.Sprite):
         return max(cell_pos[0] for cell_pos in cells)
 
     def _rotate(self, rotation: int):
-        if self.piece_type == self.O_PIECE:
+        if self.piece_type == O_PIECE:
             return
 
-        old_base = self.PIECES_ROT[self.piece_type][self.rotation]
+        old_base = PIECES_ROT[self.piece_type][self.rotation]
         new_rotation = (self.rotation + rotation) % 4
-        new_base = self.PIECES_ROT[self.piece_type][new_rotation]
+        new_base = PIECES_ROT[self.piece_type][new_rotation]
         new_cells = []
-        print(f"rot {self.rotation} -> {new_rotation}")
         for i in range(4):
             new_cells.append((self.cells[i][0] - old_base[i][0] + new_base[i][0],
                               self.cells[i][1] - old_base[i][1] + new_base[i][1]))
         correct_mode = -1
-        kick_table = self.I_WALL_KICKS if self.piece_type == self.I_PIECE else self.WALL_KICKS
+        kick_table = I_WALL_KICKS if self.piece_type == I_PIECE else WALL_KICKS
         allowed_kicks = kick_table[self.rotation][new_rotation]
         for mode in range(len(allowed_kicks)):
             correct = True
             transposed_cells = [(cell_pos[0] - allowed_kicks[mode][1],
                                  cell_pos[1] + allowed_kicks[mode][0]) for cell_pos in new_cells]
-            print(transposed_cells)
             for cell_pos in set(transposed_cells).difference(self.cells):
                 cell = self.grid.get_cell(cell_pos)
                 if cell is None or cell.cell_type != Cell.EMPTY:
                     correct = False
                     break
             if correct:
-                print("correct !")
                 correct_mode = mode
                 new_cells = transposed_cells
                 break
         if correct_mode == -1:
-            print("rotation failed !\n\n\n")
             return
 
         if correct_mode == 0:
@@ -264,7 +174,7 @@ class Tetromino(pygame.sprite.Sprite):
         3 or its 4 corners need to be filled
         and 2 of its front corners need to be filled (except for tst and fin kicks)
         """
-        if self.piece_type != self.T_PIECE or self.last_move == self.MOVE_TRANS:
+        if self.piece_type != T_PIECE or self.last_move == self.MOVE_TRANS:
             return False
         center = self.cells[1]
         corners = [
@@ -307,7 +217,7 @@ class Tetromino(pygame.sprite.Sprite):
         3 of its 4 corners need to be filled
         is not a T-spin (not tested, so this will return True also for T-spins)
         """
-        if self.piece_type != self.T_PIECE or self.last_move != self.MOVE_KICK:
+        if self.piece_type != T_PIECE or self.last_move != self.MOVE_KICK:
             return False
         center = self.cells[1]
         corners = [
@@ -435,9 +345,9 @@ class Tetromino(pygame.sprite.Sprite):
     def _draw_mini_piece(self, surface, cell_type: int, piece: int, pos_left: int, pos_top: int):
         to_draw = Cell(cell_type)
         bonus_shift = 0
-        if piece in {self.I_PIECE, self.O_PIECE}:
+        if piece in (I_PIECE, O_PIECE):
             bonus_shift = 5
-        for cell_pos in self.SPAWN_POS[piece]:
+        for cell_pos in self._get_spawn_cells(piece):
             rect = pygame.Rect(pos_left + cell_pos[1] * 10 - bonus_shift,
                                pos_top + cell_pos[0] * 10,
                                11, 11)
