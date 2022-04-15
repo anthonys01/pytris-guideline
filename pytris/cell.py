@@ -30,6 +30,8 @@ class Cell(pygame.sprite.Sprite):
              (120, 120, 120),
              (200, 200, 200)]
 
+    BORDER_COLOR = (60, 60, 60)
+
     def __init__(self, cell_type=0):
         super().__init__()
         self._cell_type = cell_type
@@ -53,3 +55,4 @@ class Cell(pygame.sprite.Sprite):
             Draw the cell
         """
         pygame.draw.rect(surface, self.COLOR[self.cell_type], rect_pos)
+        pygame.draw.rect(surface, self.BORDER_COLOR, rect_pos, 1)

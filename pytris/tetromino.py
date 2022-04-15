@@ -329,7 +329,6 @@ class Tetromino(pygame.sprite.Sprite):
                                pos_top + cell_pos[0] * 10,
                                11, 11)
             to_draw.draw(surface, rect)
-            pygame.draw.rect(surface, (60, 60, 60), rect, 1)
 
     def draw(self, surface):
         """
@@ -370,4 +369,3 @@ class Tetromino(pygame.sprite.Sprite):
                                    self.grid.margin_top + cell_pos[0] * self.grid.block_size,
                                    self.grid.block_size + 1, self.grid.block_size + 1)
                 phantom_cell.draw(surface, rect)
-                pygame.draw.rect(surface, (60, 60, 60), rect, 1)

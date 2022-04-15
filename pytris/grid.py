@@ -159,4 +159,3 @@ class Grid(pygame.sprite.Sprite):
                                    self.margin_top + line * self.block_size,
                                    self.block_size + 1, self.block_size + 1)
                 self.grid[line][col].draw(surface, rect)
-                pygame.draw.rect(surface, (60, 60, 60), rect, 1)
