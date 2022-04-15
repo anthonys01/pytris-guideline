@@ -16,7 +16,7 @@ LEFT_KEY = K_q
 RIGHT_KEY = K_d
 ROT_CW_KEY = K_k
 ROT_CCW_KEY = K_l
-ROT_180_KEY = K_KP6
+ROT_180_KEY = K_m
 HOLD_KEY = K_SPACE
 
 
@@ -86,38 +86,46 @@ class Tetromino(pygame.sprite.Sprite):
     WALL_KICKS = [
         {
             1: [(0, 0), (-1, 0), (-1, 1), (0, -2), (-1, -2)],
-            3: [(0, 0), (1, 0), (1, 1), (0, -2), (1, -2)]
+            3: [(0, 0), (1, 0), (1, 1), (0, -2), (1, -2)],
+            2: [(0, 0), (0, 1)]
         },
         {
             0: [(0, 0), (1, 0), (1, -1), (0, 2), (1, 2)],
-            2: [(0, 0), (1, 0), (1, -1), (0, 2), (1, 2)]
+            2: [(0, 0), (1, 0), (1, -1), (0, 2), (1, 2)],
+            3: [(0, 0), (1, 0)]
         },
         {
             1: [(0, 0), (-1, 0), (-1, 1), (0, -2), (-1, -2)],
-            3: [(0, 0), (1, 0), (1, 1), (0, -2), (1, -2)]
+            3: [(0, 0), (1, 0), (1, 1), (0, -2), (1, -2)],
+            0: [(0, 0), (0, -1)]
         },
         {
             2: [(0, 0), (-1, 0), (-1, -1), (0, 2), (-1, 2)],
-            0: [(0, 0), (-1, 0), (-1, -1), (0, 2), (-1, 2)]
+            0: [(0, 0), (-1, 0), (-1, -1), (0, 2), (-1, 2)],
+            1: [(0, 0), (-1, 0)]
         }
     ]
 
     I_WALL_KICKS = [
         {
             1: [(0, 0), (-2, 0), (1, 0), (-2, -1), (1, 2)],
-            3: [(0, 0), (-1, 0), (2, 0), (-1, 2), (2, -1)]
+            3: [(0, 0), (-1, 0), (2, 0), (-1, 2), (2, -1)],
+            2: [(1, -1), (1, 0)]
         },
         {
             0: [(0, 0), (2, 0), (-1, 0), (2, 1), (-1, -2)],
-            2: [(0, 0), (-1, 0), (2, 0), (-1, 2), (2, -1)]
+            2: [(0, 0), (-1, 0), (2, 0), (-1, 2), (2, -1)],
+            3: [(-1, -1), (0, -1)]
         },
         {
             1: [(0, 0), (1, 0), (-2, 2), (1, -2), (-2, 1)],
-            3: [(0, 0), (2, 0), (-1, 0), (2, 1), (-1, -2)]
+            3: [(0, 0), (2, 0), (-1, 0), (2, 1), (-1, -2)],
+            0: [(-1, 1), (-1, 0)]
         },
         {
             2: [(0, 0), (-2, 0), (1, 0), (-2, -1), (1, 2)],
-            0: [(0, 0), (1, 0), (-2, 0), (1, -2), (-2, 1)]
+            0: [(0, 0), (1, 0), (-2, 0), (1, -2), (-2, 1)],
+            1: [(1, 1), (0, 1)]
         }
     ]
 
@@ -204,31 +212,35 @@ class Tetromino(pygame.sprite.Sprite):
         new_rotation = (self.rotation + rotation) % 4
         new_base = self.PIECES_ROT[self.piece_type][new_rotation]
         new_cells = []
+        print(f"rot {self.rotation} -> {new_rotation}")
         for i in range(4):
             new_cells.append((self.cells[i][0] - old_base[i][0] + new_base[i][0],
                               self.cells[i][1] - old_base[i][1] + new_base[i][1]))
         correct_mode = -1
         kick_table = self.I_WALL_KICKS if self.piece_type == self.I_PIECE else self.WALL_KICKS
         allowed_kicks = kick_table[self.rotation][new_rotation]
-        for mode in range(5):
+        for mode in range(len(allowed_kicks)):
             correct = True
             transposed_cells = [(cell_pos[0] - allowed_kicks[mode][1],
                                  cell_pos[1] + allowed_kicks[mode][0]) for cell_pos in new_cells]
+            print(transposed_cells)
             for cell_pos in set(transposed_cells).difference(self.cells):
                 cell = self.grid.get_cell(cell_pos)
                 if cell is None or cell.cell_type != Cell.EMPTY:
                     correct = False
                     break
             if correct:
+                print("correct !")
                 correct_mode = mode
                 new_cells = transposed_cells
                 break
         if correct_mode == -1:
+            print("rotation failed !\n\n\n")
             return
 
         if correct_mode == 0:
             self.last_move = self.MOVE_ROT
-        elif self.rotation == 0 or self.rotation == 2:
+        elif self.rotation in (0, 2):
             # possible TST or fin kicks
             if correct_mode == 4:
                 self.last_move = self.MOVE_TST_KICK
@@ -370,19 +382,24 @@ class Tetromino(pygame.sprite.Sprite):
             self.key_pressed.append(HD_KEY)
             return
 
-        if pressed_keys[ROT_CW_KEY] and pressed_keys[ROT_CCW_KEY] and \
-            ROT_CW_KEY not in self.key_pressed and ROT_CCW_KEY not in self.key_pressed:
+        new_rot_keys_pressed = []
+        for rot_key in (ROT_CW_KEY, ROT_CCW_KEY, ROT_180_KEY):
+            if pressed_keys[rot_key] and rot_key not in self.key_pressed:
+                new_rot_keys_pressed.append(rot_key)
+
+        if len(new_rot_keys_pressed) > 1:
             # nothing happens
-            self.key_pressed.append(ROT_CW_KEY)
-            self.key_pressed.append(ROT_CCW_KEY)
+            self.key_pressed += new_rot_keys_pressed
 
         if pressed_keys[ROT_CW_KEY] and ROT_CW_KEY not in self.key_pressed:
             self.key_pressed.append(ROT_CW_KEY)
             self._rotate(1)
-
-        if pressed_keys[ROT_CCW_KEY] and ROT_CCW_KEY not in self.key_pressed:
+        elif pressed_keys[ROT_CCW_KEY] and ROT_CCW_KEY not in self.key_pressed:
             self.key_pressed.append(ROT_CCW_KEY)
             self._rotate(-1)
+        elif pressed_keys[ROT_180_KEY] and ROT_180_KEY not in self.key_pressed:
+            self.key_pressed.append(ROT_180_KEY)
+            self._rotate(2)
 
         self._translate(pressed_keys)
 

@@ -52,6 +52,19 @@ if __name__ == "__main__":
                 pygame.quit()
                 sys.exit()
 
+        keys = pygame.key.get_pressed()
+        if keys[K_BACKSPACE]:
+            # reset the game
+            g = Grid()
+            t = Tetromino(g)
+            t.set_next_from_queue()
+            t.spawn_piece()
+            combo = 0
+            back_2_back = 0
+            text = ''
+            end = False
+            go_down = False
+
         if not end:
             if t.locked:
                 tspin = t.is_tspin()
