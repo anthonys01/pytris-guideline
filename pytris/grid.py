@@ -16,8 +16,8 @@ class Grid(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__()
         self.margin_top = 70
-        self.margin_left = 70
-        self.block_size = 19
+        self.margin_left = 95
+        self.block_size = 25
         self.height = 22
         self.width = 10
         empty_line = [None] * self.width

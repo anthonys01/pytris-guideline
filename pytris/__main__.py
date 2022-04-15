@@ -25,7 +25,7 @@ def render_text(surface, text: str, x_pos: int, y_pos: int):
 if __name__ == "__main__":
     pygame.init()
 
-    begin_size = (500, 600)
+    begin_size = (500, 720)
     win = pygame.display.set_mode(begin_size, RESIZABLE)
     display_surface = pygame.Surface(begin_size)
     FPS = pygame.time.Clock()
@@ -82,7 +82,7 @@ if __name__ == "__main__":
                         f" {'Back-to-back ' + str(back_2_back) if back_2_back else ''}"
                         f" {str(combo) + '-combo' if combo else ''}")
                     print(text)
-                    if tspin or cleared == 4:
+                    if tspin or cleared == 4 or mini:
                         back_2_back += 1
                     combo += 1
                 else:

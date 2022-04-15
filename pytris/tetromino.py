@@ -348,9 +348,9 @@ class Tetromino(pygame.sprite.Sprite):
         if piece in (I_PIECE, O_PIECE):
             bonus_shift = 5
         for cell_pos in self._get_spawn_cells(piece):
-            rect = pygame.Rect(pos_left + cell_pos[1] * 10 - bonus_shift,
-                               pos_top + cell_pos[0] * 10,
-                               11, 11)
+            rect = pygame.Rect(pos_left + cell_pos[1] * 14 - bonus_shift,
+                               pos_top + cell_pos[0] * 14,
+                               15, 15)
             to_draw.draw(surface, rect)
 
     def draw(self, surface):
@@ -358,20 +358,20 @@ class Tetromino(pygame.sprite.Sprite):
             Draw the grid and its cells
         """
         # HOLD
-        rect = pygame.Rect(10, self.grid.margin_top, 50, 60)
+        rect = pygame.Rect(self.grid.margin_left - 85, self.grid.margin_top, 73, 73)
         pygame.draw.rect(surface, (20, 20, 20), rect)
         pygame.draw.rect(surface, (60, 60, 60), rect, 2)
         if self.hold_piece is not None:
             self._draw_mini_piece(surface,
                                   Cell.GARBAGE if self.holt else self.CELL[self.hold_piece],
                                   self.hold_piece,
-                                  - 10,
+                                  self.grid.margin_left - 112,
                                   self.grid.margin_top + 20)
 
         # PREVIEW
         preview_left = self.grid.margin_left + self.grid.width * self.grid.block_size + 12
         preview_top = self.grid.margin_top
-        rect = pygame.Rect(preview_left, preview_top, 50, 200)
+        rect = pygame.Rect(preview_left, preview_top, 73, 250)
         pygame.draw.rect(surface, (20, 20, 20), rect)
         pygame.draw.rect(surface, (60, 60, 60), rect, 2)
         number = 0
@@ -380,8 +380,8 @@ class Tetromino(pygame.sprite.Sprite):
             self._draw_mini_piece(surface,
                                   self.CELL[piece],
                                   piece,
-                                  preview_left - 20,
-                                  self.grid.margin_top - 15 + number * 35)
+                                  preview_left - 28,
+                                  self.grid.margin_top - 24 + number * 45)
 
         # phantom
         phantom = self.grid.get_hd_pos(self.cells)
