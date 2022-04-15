@@ -17,7 +17,7 @@ RIGHT_KEY = K_d
 ROT_CW_KEY = K_k
 ROT_CCW_KEY = K_l
 ROT_180_KEY = K_KP6
-HOLD_KEY = K_KP0
+HOLD_KEY = K_SPACE
 
 
 class Tetromino(pygame.sprite.Sprite):
@@ -108,11 +108,16 @@ class Tetromino(pygame.sprite.Sprite):
         self.das_load = 0
         self.last_move = None
         self.gravity_lock = False
+        self.holt = False
+        self.last_dir = 0
 
     def _add_next_bag_to_queue(self):
         next_pieces = list(range(7))
         self.randomizer.shuffle(next_pieces)
         self.queue = next_pieces + self.queue
+
+    def _get_preview(self):
+        return reversed(self.queue[-5:])
 
     def set_next_from_queue(self):
         """
@@ -121,20 +126,20 @@ class Tetromino(pygame.sprite.Sprite):
         if len(self.queue) < 8:
             self._add_next_bag_to_queue()
         self.piece_type = self.queue.pop()
+        self.piece_nb += 1
+        self.holt = False
 
     def spawn_piece(self) -> bool:
         """
         Try to spawn the tetromino piece in the spawn area. Succeed iif all needed cells are empty
         :return: True if succeeded, False otherwise
         """
-        self.set_next_from_queue()
         for pos in self.SPAWN_POS[self.piece_type]:
             if self.grid.get_cell(pos).cell_type != Cell.EMPTY:
                 return False
         for pos in self.SPAWN_POS[self.piece_type]:
             self.grid.get_cell(pos).cell_type = self.CELL[self.piece_type]
         self.cells = self.SPAWN_POS[self.piece_type]
-        self.piece_nb += 1
         self.locked = False
         self.current_height = 1
         self.max_height = 1
@@ -222,13 +227,16 @@ class Tetromino(pygame.sprite.Sprite):
             left += 1
 
         if left != 0:
-            if self.das_load == 0:
+            if left * self.last_dir < 0:
+                self.das_load = 1
+            elif self.das_load == 0:
                 self.das_load += 1
             elif self.das_load < self.DAS_TRIGGER:
                 self.das_load += 1
                 left = 0
         else:
             self.das_load = 0
+        self.last_dir = left
         # TODO take into account ARR and SD speed
         new_cells = self.grid.move(left, top, self.cells)
         if new_cells != self.cells:
@@ -246,6 +254,19 @@ class Tetromino(pygame.sprite.Sprite):
         for key in list(self.key_pressed):
             if not pressed_keys[key]:
                 self.key_pressed.remove(key)
+
+        if pressed_keys[HOLD_KEY] and HOLD_KEY not in self.key_pressed and not self.holt:
+            self.key_pressed.append(HOLD_KEY)
+            if self.hold_piece is None:
+                self.hold_piece = self.piece_type
+                self.set_next_from_queue()
+            else:
+                self.hold_piece, self.piece_type = self.piece_type, self.hold_piece
+            for cell_pos in self.cells:
+                self.grid.get_cell(cell_pos).cell_type = Cell.EMPTY
+            self.holt = True
+            self.spawn_piece()
+            return
 
         if pressed_keys[HD_KEY] and HD_KEY not in self.key_pressed:
             self.cells = self.grid.move(0, self.grid.height, self.cells)
@@ -298,10 +319,49 @@ class Tetromino(pygame.sprite.Sprite):
             self.current_height = new_height
             self.last_move = self.MOVE_TRANS
 
+    def _draw_mini_piece(self, surface, cell_type: int, piece: int, pos_left: int, pos_top: int):
+        to_draw = Cell(cell_type)
+        bonus_shift = 0
+        if piece in {self.I_PIECE, self.O_PIECE}:
+            bonus_shift = 5
+        for cell_pos in self.SPAWN_POS[piece]:
+            rect = pygame.Rect(pos_left + cell_pos[1] * 10 - bonus_shift,
+                               pos_top + cell_pos[0] * 10,
+                               11, 11)
+            to_draw.draw(surface, rect)
+            pygame.draw.rect(surface, (60, 60, 60), rect, 1)
+
     def draw(self, surface):
         """
             Draw the grid and its cells
         """
+        # HOLD
+        rect = pygame.Rect(10, self.grid.margin_top, 50, 60)
+        pygame.draw.rect(surface, (20, 20, 20), rect)
+        pygame.draw.rect(surface, (60, 60, 60), rect, 2)
+        if self.hold_piece is not None:
+            self._draw_mini_piece(surface,
+                                  Cell.GARBAGE if self.holt else self.CELL[self.hold_piece],
+                                  self.hold_piece,
+                                  - 10,
+                                  self.grid.margin_top + 20)
+
+        # PREVIEW
+        preview_left = self.grid.margin_left + self.grid.width * self.grid.block_size + 12
+        preview_top = self.grid.margin_top
+        rect = pygame.Rect(preview_left, preview_top, 50, 200)
+        pygame.draw.rect(surface, (20, 20, 20), rect)
+        pygame.draw.rect(surface, (60, 60, 60), rect, 2)
+        number = 0
+        for piece in self._get_preview():
+            number += 1
+            self._draw_mini_piece(surface,
+                                  self.CELL[piece],
+                                  piece,
+                                  preview_left - 20,
+                                  self.grid.margin_top - 15 + number * 35)
+
+        # phantom
         phantom = self.grid.get_hd_pos(self.cells)
         if not set(phantom).intersection(self.cells):
             phantom_cell = Cell(Cell.PHANTOM)

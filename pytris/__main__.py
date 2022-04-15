@@ -25,14 +25,17 @@ def render_text(surface, text: str, x_pos: int, y_pos: int):
 if __name__ == "__main__":
     pygame.init()
 
-    DISPLAYSURF = pygame.display.set_mode((500, 600))
+    begin_size = (500, 600)
+    win = pygame.display.set_mode(begin_size, RESIZABLE)
+    display_surface = pygame.Surface(begin_size)
     FPS = pygame.time.Clock()
-    DISPLAYSURF.fill((0, 0, 0))
+    display_surface.fill((0, 0, 0))
     pygame.display.set_caption("Pytris")
     pygame.time.set_timer(GRAVITY_TICK_EVENT, 1000)
 
     g = Grid()
     t = Tetromino(g)
+    t.set_next_from_queue()
     t.spawn_piece()
     combo = 0
     back_2_back = 0
@@ -64,14 +67,18 @@ if __name__ == "__main__":
                 combo += 1
             else:
                 combo = 0
+            t.set_next_from_queue()
             if not t.spawn_piece():
                 text = "END"
 
         t.update()
 
-        DISPLAYSURF.fill((150, 150, 150))
-        g.draw(DISPLAYSURF)
-        t.draw(DISPLAYSURF)
-        render_text(DISPLAYSURF, text, 300, 30)
+        display_surface.fill((150, 150, 150))
+        g.draw(display_surface)
+        t.draw(display_surface)
+        render_text(display_surface, text, 300, 30)
+
+        scaled = pygame.transform.smoothscale(display_surface, win.get_size())
+        win.blit(scaled, (0, 0))
 
         FPS.tick(60)
