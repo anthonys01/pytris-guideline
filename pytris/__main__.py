@@ -7,6 +7,7 @@ import pygame
 import pygame_gui
 from pygame.locals import *
 
+from pytris.keymanager import KeyManager, Key
 from pytris.player import Player
 
 GRAVITY_TICK_EVENT = USEREVENT + 1
@@ -38,7 +39,8 @@ if __name__ == "__main__":
     gui_manager = pygame_gui.UIManager(begin_size)
     time_delta = 0
 
-    p = Player()
+    km = KeyManager()
+    p = Player(km)
     p.set_next_from_queue()
     p.spawn_piece()
     text = ''
@@ -59,8 +61,9 @@ if __name__ == "__main__":
                 sys.exit()
             gui_manager.process_events(event)
 
-        keys = pygame.key.get_pressed()
-        if not reset and keys[K_BACKSPACE]:
+        # need to update keyboard manager before updating player
+        km.update()
+        if not reset and km.pressed[Key.RESET_KEY]:
             # reset the game
             p.reset()
             p.set_next_from_queue()
@@ -69,7 +72,7 @@ if __name__ == "__main__":
             end = False
             go_down = False
             reset = True
-        if not keys[K_BACKSPACE]:
+        elif not km.pressed[Key.RESET_KEY]:
             reset = False
 
         if not end:

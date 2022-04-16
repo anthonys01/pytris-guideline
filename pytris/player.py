@@ -7,20 +7,11 @@ import random
 from typing import List
 
 import pygame
-from pygame.locals import *
 
 from pytris.cell import Cell
 from pytris.grid import Grid
+from pytris.keymanager import KeyManager, Key
 from pytris.pieces import *
-
-HD_KEY = K_z
-SD_KEY = K_s
-LEFT_KEY = K_q
-RIGHT_KEY = K_d
-ROT_CW_KEY = K_k
-ROT_CCW_KEY = K_l
-ROT_180_KEY = K_m
-HOLD_KEY = K_SPACE
 
 
 class Player(pygame.sprite.Sprite):
@@ -48,8 +39,9 @@ class Player(pygame.sprite.Sprite):
     UNMOVING_TICKS_LOCK = 2
     MOVING_TICKS_LOCK = 8
 
-    def __init__(self, seed: str = None):
+    def __init__(self, key_manager: KeyManager, seed: str = None):
         super().__init__()
+        self._key_manager = key_manager
         self._seed = seed
         self._randomizer = random.Random(self._seed)
 
@@ -92,8 +84,6 @@ class Player(pygame.sprite.Sprite):
         self._queue = []
         # current holt piece type
         self._hold_piece = None
-        # current pressed keys
-        self._key_pressed = []
         # DAS load counter. Piece start scrolling after this counter is charged higher than DAS trigger
         self._das_load = 0
         # last move type (rotation, kick, tst kick, translation)
@@ -125,7 +115,6 @@ class Player(pygame.sprite.Sprite):
         self._hold_piece = None
         self._current_piece = None
         self._das_load = 0
-        self._key_pressed = []
         self._combo = -1
         self._back_to_back = -1
         self._arr_load = 0
@@ -299,14 +288,14 @@ class Player(pygame.sprite.Sprite):
         # 3 corners rule
         return sum(_is_used(corner) for corner in corners) >= 3
 
-    def _translate(self, pressed_keys):
+    def _translate(self):
         top = 0
         left = 0
-        if pressed_keys[SD_KEY]:
+        if self._key_manager.pressing[Key.SD_KEY]:
             top += 1
-        if pressed_keys[LEFT_KEY]:
+        if self._key_manager.pressing[Key.LEFT_KEY]:
             left -= 1
-        if pressed_keys[RIGHT_KEY]:
+        if self._key_manager.pressing[Key.RIGHT_KEY]:
             left += 1
 
         if left != 0:
@@ -360,14 +349,8 @@ class Player(pygame.sprite.Sprite):
         """
         if self.locked:
             return
-        pressed_keys = pygame.key.get_pressed()
 
-        for key in list(self._key_pressed):
-            if not pressed_keys[key]:
-                self._key_pressed.remove(key)
-
-        if pressed_keys[HOLD_KEY] and HOLD_KEY not in self._key_pressed and not self._holt:
-            self._key_pressed.append(HOLD_KEY)
+        if self._key_manager.pressed[Key.HOLD_KEY] and not self._holt:
             if self._hold_piece is None:
                 self._hold_piece = self._current_piece
                 self.set_next_from_queue()
@@ -379,32 +362,25 @@ class Player(pygame.sprite.Sprite):
             self.spawn_piece()
             return
 
-        if pressed_keys[HD_KEY] and HD_KEY not in self._key_pressed:
+        if self._key_manager.pressed[Key.HD_KEY]:
             self._cells = self.grid.move(0, self.grid.HEIGHT, self._cells)
             self.locked = True
-            self._key_pressed.append(HD_KEY)
             return
 
         new_rot_keys_pressed = []
-        for rot_key in (ROT_CW_KEY, ROT_CCW_KEY, ROT_180_KEY):
-            if pressed_keys[rot_key] and rot_key not in self._key_pressed:
+        for rot_key in (Key.ROT_CW_KEY, Key.ROT_CCW_KEY, Key.ROT_180_KEY):
+            if self._key_manager.pressed[rot_key]:
                 new_rot_keys_pressed.append(rot_key)
 
-        if len(new_rot_keys_pressed) > 1:
-            # nothing happens
-            self._key_pressed += new_rot_keys_pressed
+        if len(new_rot_keys_pressed) == 1:
+            if self._key_manager.pressed[Key.ROT_CW_KEY]:
+                self._rotate(1)
+            elif self._key_manager.pressed[Key.ROT_CCW_KEY]:
+                self._rotate(-1)
+            elif self._key_manager.pressed[Key.ROT_180_KEY]:
+                self._rotate(2)
 
-        if pressed_keys[ROT_CW_KEY] and ROT_CW_KEY not in self._key_pressed:
-            self._key_pressed.append(ROT_CW_KEY)
-            self._rotate(1)
-        elif pressed_keys[ROT_CCW_KEY] and ROT_CCW_KEY not in self._key_pressed:
-            self._key_pressed.append(ROT_CCW_KEY)
-            self._rotate(-1)
-        elif pressed_keys[ROT_180_KEY] and ROT_180_KEY not in self._key_pressed:
-            self._key_pressed.append(ROT_180_KEY)
-            self._rotate(2)
-
-        self._translate(pressed_keys)
+        self._translate()
 
         new_height = self._get_max_height(*self._cells)
         if new_height > self._max_height:
