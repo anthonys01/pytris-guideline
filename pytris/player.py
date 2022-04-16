@@ -7,11 +7,13 @@ import random
 from typing import List
 
 import pygame
+import pygame_gui.elements.ui_label
 
 from pytris.cell import Cell
 from pytris.grid import Grid
 from pytris.keymanager import KeyManager, Key
 from pytris.pieces import *
+from pytris.gamemode import *
 
 
 class Player(pygame.sprite.Sprite):
@@ -39,16 +41,24 @@ class Player(pygame.sprite.Sprite):
     UNMOVING_TICKS_LOCK = 2
     MOVING_TICKS_LOCK = 8
 
-    def __init__(self, key_manager: KeyManager, seed: str = None):
+    def __init__(self, gui_manager: pygame_gui.UIManager, key_manager: KeyManager, game_mode: int, seed: str = None):
         super().__init__()
+        self.player_ui_left = 0
+        self.player_ui_top = 70
+
+        self._game_mode = game_mode
+
         self._key_manager = key_manager
+        self._gui_manager = gui_manager
         self._seed = seed
         self._randomizer = random.Random(self._seed)
 
         # grid with (X,Y) coordinates. X lines going down, Y columns going right
-        self.grid = Grid(95, 70)
+        self.grid = Grid(self.player_ui_left + 95, self.player_ui_top)
         # if current piece is not movable by the player
         self.locked = False
+
+        self._topped_out = False
 
         # das trigger. start using arr once das_load >= das
         self.das: int = 6
@@ -102,15 +112,36 @@ class Player(pygame.sprite.Sprite):
         # current back to back
         self._back_to_back = -1
         # current score
-        self._score = 0
+        self.score = 0
 
         # number of pieces used - for stats
         self._piece_nb = 0
+        # number of lines cleared - for stats
+        self._lines_cleared = 0
+        # time in ms - for stats
+        self.time: int = 0
+
+        self._damage_textbox = pygame_gui.elements.UITextBox(
+            "",
+            pygame.Rect(self.player_ui_left, self.player_ui_top + 130, 90, 150), gui_manager)
+
+        self._combo_textbox = pygame_gui.elements.UITextBox(
+            "",
+            pygame.Rect(self.player_ui_left, self.player_ui_top + 280, 90, 50), gui_manager)
+
+        self._stats_textbox = pygame_gui.elements.UITextBox(
+            self._get_stats_text(),
+            pygame.Rect(self.player_ui_left, self.player_ui_top + 330, 90, 200), gui_manager)
+
+        self._score_textbox = pygame_gui.elements.UITextBox(
+            self._get_score_text(),
+            pygame.Rect(self.player_ui_left + 360, self.player_ui_top + 400, 90, 90), gui_manager)
 
     def reset(self):
         self.grid.reset()
         self._randomizer = random.Random(self._seed)
         self._piece_nb = 0
+        self._lines_cleared = 0
         self._queue = []
         self._hold_piece = None
         self._current_piece = None
@@ -119,7 +150,20 @@ class Player(pygame.sprite.Sprite):
         self._back_to_back = -1
         self._arr_load = 0
         self._sd_load = 0
-        self._score = 0
+        self.score = 0
+        self.time = 0
+        self._topped_out = False
+        self._damage_textbox.set_text("")
+        self._combo_textbox.set_text("")
+
+    def game_finished(self) -> bool:
+        if self._topped_out:
+            return True
+        if self._game_mode == SPRINT_MODE:
+            return self._lines_cleared >= 40
+        if self._game_mode == ULTRA_MODE:
+            return 120000 - self.time <= 0
+        return False
 
     def _add_next_bag_to_queue(self):
         next_pieces = list(range(7))
@@ -136,7 +180,6 @@ class Player(pygame.sprite.Sprite):
         if len(self._queue) < 8:
             self._add_next_bag_to_queue()
         self._current_piece = self._queue.pop()
-        self._piece_nb += 1
         self._holt = False
 
     def _get_spawn_cells(self, piece_type: int):
@@ -152,6 +195,7 @@ class Player(pygame.sprite.Sprite):
         spawn_cells = self._get_spawn_cells(self._current_piece)
         for pos in spawn_cells:
             if self.grid.get_cell(pos).cell_type != Cell.EMPTY:
+                self._topped_out = True
                 return False
         for pos in spawn_cells:
             self.grid.get_cell(pos).cell_type = self.CELL[self._current_piece]
@@ -343,10 +387,12 @@ class Player(pygame.sprite.Sprite):
             self._cells = new_cells
             self._last_move = self.MOVE_TRANS
 
-    def update(self):
+    def update(self, time_delta):
         """
             Update piece position following user input
         """
+        self.time += time_delta
+
         if self.locked:
             return
 
@@ -396,10 +442,15 @@ class Player(pygame.sprite.Sprite):
         self._current_height = new_height
 
     def clear_lines(self):
+        """
+            Actions to do after a piece was locked
+        """
+        self._piece_nb += 1
         tspin = self.is_tspin()
         mini = False if tspin else self.is_tspin_mini()
         cleared_lines = self.grid.clear_lines()
         perfect = self.grid.is_board_empty()
+        self._lines_cleared += cleared_lines
 
         if cleared_lines > 0:
             self._combo += 1
@@ -407,18 +458,18 @@ class Player(pygame.sprite.Sprite):
             self._combo = -1
         if cleared_lines == 4 or (cleared_lines > 0 and (tspin or mini)):
             self._back_to_back += 1
-        else:
+        elif cleared_lines > 0:
             self._back_to_back = -1
         text = (
-            f"{'Perfect Clear ' if perfect else ''}"
             f"{'T-spin ' if tspin else ''}"
             f"{'T-spin mini ' if mini else ''}"
             f"{['', 'Single', 'Double', 'Triple', 'Quad'][cleared_lines]}"
-            f" {'Back-to-back ' + str(self._back_to_back) if self._back_to_back > 0 else ''}"
-            f" {str(self._combo) + '-combo' if self._combo > 0 else ''}")
+            f" {'Back-to-back ' + str(self._back_to_back) if self._back_to_back > 0 else ''}")
+
+        combo = f"{str(self._combo) + ' REN' if self._combo > 0 else ''}"
         text = text.strip()
-        if text:
-            print(text)
+        self._damage_textbox.set_text(text)
+        self._combo_textbox.set_text(combo)
 
     def go_down(self):
         """
@@ -458,10 +509,69 @@ class Player(pygame.sprite.Sprite):
                                15, 15)
             to_draw.draw(surface, rect)
 
+    def _get_stats_text(self) -> str:
+        if self._game_mode == FREE_PLAY_MODE:
+            ms = self.time % 1000
+            total_secs = self.time // 1000
+            minutes = total_secs // 60
+            secs = total_secs % 60
+            return (
+                f"<br><br>"
+                f"<br><b>Lines</b>"
+                f"<br>{self._lines_cleared}"
+                f"<br><b>Time</b>"
+                f"<br>{minutes:0>2}:{secs:0>2}.{ms:0>3}"
+            )
+        elif self._game_mode == SPRINT_MODE:
+            ms = self.time % 1000
+            total_secs = self.time // 1000
+            minutes = total_secs // 60
+            secs = total_secs % 60
+            pps = 0
+            if self.time > 0:
+                pps = 1000 * self._piece_nb / self.time
+            return (
+                f"<b>PPS</b>"
+                f"<br>{pps:.2f}"
+                f"<br><b>Lines</b>"
+                f"<br>{self._lines_cleared:0>2}/40"
+                f"<br><b>Time</b>"
+                f"<br>{minutes:0>2}:{secs:0>2}.{ms:0>3}"
+            )
+        elif self._game_mode == ULTRA_MODE:
+            time_left = 120000 - self.time
+            ms = time_left % 1000
+            total_secs = time_left // 1000
+            minutes = total_secs // 60
+            secs = total_secs % 60
+            pps = 0
+            if self.time > 0:
+                pps = 1000 * self._piece_nb / self.time
+            return (
+                f"<b>PPS</b>"
+                f"<br>{pps:.2f}"
+                f"<br><b>Lines</b>"
+                f"<br>{self._lines_cleared}"
+                f"<br><b>Time Left</b>"
+                f"<br>{minutes:0>2}:{secs:0>2}.{ms:0>3}"
+            )
+        return ""
+
+    def _get_score_text(self) -> str:
+        if self._game_mode == ULTRA_MODE:
+            return (
+                f"<b>Score</b>"
+                f"<br>{self.score}"
+            )
+        return ""
+
     def draw(self, surface):
         """
             Draw the grid and its cells
         """
+        self._stats_textbox.set_text(self._get_stats_text())
+        self._score_textbox.set_text(self._get_score_text())
+
         # GRID
         self.grid.draw(surface)
 
