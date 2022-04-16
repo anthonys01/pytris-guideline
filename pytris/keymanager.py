@@ -1,32 +1,36 @@
 """
     Manage key presses and key binding
 """
-from enum import auto, Enum
+import json
+import os.path
+from enum import Enum
 from typing import Dict
 
 import pygame
 from pygame.locals import *
 
 
-class Key(Enum):
+class Key(str, Enum):
     """
         Relevant keys for the game
     """
-    HD_KEY = auto()
-    SD_KEY = auto()
-    LEFT_KEY = auto()
-    RIGHT_KEY = auto()
-    ROT_CW_KEY = auto()
-    ROT_CCW_KEY = auto()
-    ROT_180_KEY = auto()
-    HOLD_KEY = auto()
-    RESET_KEY = auto()
+    HD_KEY = "hard_drop"
+    SD_KEY = "soft_drop"
+    LEFT_KEY = "left"
+    RIGHT_KEY = "right"
+    ROT_CW_KEY = "rotate_cw"
+    ROT_CCW_KEY = "rotate_ccw"
+    ROT_180_KEY = "rotate_180"
+    HOLD_KEY = "hold"
+    RESET_KEY = "reset"
 
 
 class KeyManager:
     """
         Manage key presses and binding
     """
+    KEYBIND_FILE_PATH = "data/key_binding.json"
+
     def __init__(self):
         self._pressing_keys: Dict[Key, bool] = {}
         self._just_pressed_keys: Dict[Key, bool] = {}
@@ -34,27 +38,56 @@ class KeyManager:
         self._init_mapping()
 
     def _init_mapping(self):
-        self._enum_to_key_mapping = {
-            Key.HD_KEY: K_z,
-            Key.SD_KEY: K_s,
-            Key.LEFT_KEY: K_q,
-            Key.RIGHT_KEY: K_d,
-            Key.ROT_CW_KEY: K_k,
-            Key.ROT_CCW_KEY: K_l,
-            Key.ROT_180_KEY: K_m,
-            Key.HOLD_KEY: K_SPACE,
-            Key.RESET_KEY: K_BACKSPACE
-        }
+        json_data = {}
+        if os.path.exists(self.KEYBIND_FILE_PATH):
+            with open(self.KEYBIND_FILE_PATH, "r") as f:
+                json_data = json.load(f)
+        if not json_data:
+            self._enum_to_key_mapping = {
+                Key.HD_KEY: K_z,
+                Key.SD_KEY: K_s,
+                Key.LEFT_KEY: K_q,
+                Key.RIGHT_KEY: K_d,
+                Key.ROT_CW_KEY: K_k,
+                Key.ROT_CCW_KEY: K_l,
+                Key.ROT_180_KEY: K_m,
+                Key.HOLD_KEY: K_SPACE,
+                Key.RESET_KEY: K_BACKSPACE
+            }
+            print("No binding data was found, setting default values")
+        else:
+            for key, value in json_data.items():
+                self._enum_to_key_mapping[Key(key)] = value
+
+    def save_settings(self, bindings: Dict[Key, int]) -> bool:
+        """
+            Save given bindings and apply it
+        """
+        if os.path.exists(self.KEYBIND_FILE_PATH):
+            with open(self.KEYBIND_FILE_PATH, "w") as f:
+                json.dump(bindings, f)
+                self._enum_to_key_mapping = dict(bindings)
+            return True
+        return False
 
     @property
     def pressed(self) -> Dict[Key, bool]:
+        """
+            Keys that were just pressed this frame
+        """
         return dict(self._just_pressed_keys)
 
     @property
     def pressing(self) -> Dict[Key, bool]:
+        """
+            Keys currently pressed
+        """
         return dict(self._pressing_keys)
 
     def update(self):
+        """
+            Update pressed keys
+        """
         pressed_keys = pygame.key.get_pressed()
         for enum, key in self._enum_to_key_mapping.items():
             self._just_pressed_keys[enum] = pressed_keys[key] and not self._pressing_keys[enum]
