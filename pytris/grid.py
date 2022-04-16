@@ -81,14 +81,18 @@ class Grid(pygame.sprite.Sprite):
         if left == 0 and top == 0:
             return cells_pos
 
+        cells_pos_to_return = cells_pos
+        correct_top = 0
         if top != 0:
             iteration = top // abs(top)
-            okay = False
-            while top != 0 and not okay:
-                new_cells_pos = set()
+            okay = True
+            while okay and abs(correct_top) < abs(top):
+                correct_top += iteration
+                new_cells_pos_to_return = []
                 for cell_pos in cells_pos:
-                    new_cells_pos.add((cell_pos[0] + top, cell_pos[1]))
-                new_cells_pos.difference_update(cells_pos)
+                    new_cells_pos_to_return.append((cell_pos[0] + correct_top, cell_pos[1]))
+                new_cells_pos = set(new_cells_pos_to_return).difference(cells_pos)
+
                 conflict = False
                 for new_cell_pos in new_cells_pos:
                     cell = self.get_cell(new_cell_pos)
@@ -96,20 +100,22 @@ class Grid(pygame.sprite.Sprite):
                         conflict = True
                         break
                 if conflict:
-                    top -= iteration
+                    okay = False
+                    correct_top -= 1
                 else:
-                    okay = True
+                    cells_pos_to_return = new_cells_pos_to_return
 
-        new_cells_pos_to_return = []
-        for cell_pos in cells_pos:
-            new_cells_pos_to_return.append((cell_pos[0] + top, cell_pos[1] + left))
-        to_clean_pos = set(cells_pos).difference(new_cells_pos_to_return)
-        new_cells_pos = set(new_cells_pos_to_return).difference(cells_pos)
-
+        correct_left = 0
         if left != 0:
             iteration = left // abs(left)
-            okay = False
-            while left != 0 and not okay:
+            okay = True
+            while okay and abs(correct_left) < abs(left):
+                correct_left += iteration
+                new_cells_pos_to_return = []
+                for cell_pos in cells_pos_to_return:
+                    new_cells_pos_to_return.append((cell_pos[0], cell_pos[1] + correct_left))
+                new_cells_pos = set(new_cells_pos_to_return).difference(cells_pos)
+
                 conflict = False
                 for new_cell_pos in new_cells_pos:
                     cell = self.get_cell(new_cell_pos)
@@ -117,27 +123,23 @@ class Grid(pygame.sprite.Sprite):
                         conflict = True
                         break
                 if conflict:
-                    left -= iteration
-                    new_cells_pos_to_return = []
-                    for cell_pos in cells_pos:
-                        new_cells_pos_to_return.append((cell_pos[0] + top, cell_pos[1] + left))
-                    to_clean_pos = set(cells_pos).difference(new_cells_pos_to_return)
-                    new_cells_pos = set(new_cells_pos_to_return).difference(cells_pos)
+                    okay = False
+                    correct_left -= 1
                 else:
-                    okay = True
+                    cells_pos_to_return = new_cells_pos_to_return
 
-        if left == 0 and top == 0:
+        if correct_top == 0 and correct_left == 0:
             return cells_pos
 
         new_type = self.get_cell(cells_pos[0]).cell_type
 
-        for pos in to_clean_pos:
+        for pos in cells_pos:
             self.get_cell(pos).cell_type = Cell.EMPTY
 
-        for pos in new_cells_pos:
+        for pos in cells_pos_to_return:
             self.get_cell(pos).cell_type = new_type
 
-        return new_cells_pos_to_return
+        return cells_pos_to_return
 
     def clear_lines(self) -> int:
         """

@@ -45,7 +45,6 @@ class Player(pygame.sprite.Sprite):
     MOVE_TRANS = "translation"
 
     ALLOWED_WIGGLES = 5
-    DAS_TRIGGER = 7
     UNMOVING_TICKS_LOCK = 2
     MOVING_TICKS_LOCK = 8
 
@@ -58,6 +57,23 @@ class Player(pygame.sprite.Sprite):
         self.grid = Grid(95, 70)
         # if current piece is not movable by the player
         self.locked = False
+
+        # das trigger. start using arr once das_load >= das
+        self.das: int = 6
+
+        # arr == 0 -> immediate
+        # 0 < arr < 1 -> each frame move int(1 / arr) cell
+        # arr >= 1 move 1 block each int(arr) frame
+        self.arr: float = 0
+        # used if arr >= 1
+        self._arr_load = 0
+
+        # sd == 0 -> immediate
+        # 0 < sd < 1 -> each frame move int(1 / sd) cell
+        # sd >= 1 move 1 block each int(sd) frame
+        self.sd: float = 0
+        # used if sd >= 1
+        self._sd_load = 0
 
         # current piece type moved by the player
         self._current_piece = None
@@ -91,6 +107,13 @@ class Player(pygame.sprite.Sprite):
         # last piece translation direction. 0 unmoving, negative left, positive right
         self._last_dir = 0
 
+        # current ren combo
+        self._combo = -1
+        # current back to back
+        self._back_to_back = -1
+        # current score
+        self._score = 0
+
         # number of pieces used - for stats
         self._piece_nb = 0
 
@@ -103,6 +126,11 @@ class Player(pygame.sprite.Sprite):
         self._current_piece = None
         self._das_load = 0
         self._key_pressed = []
+        self._combo = -1
+        self._back_to_back = -1
+        self._arr_load = 0
+        self._sd_load = 0
+        self._score = 0
 
     def _add_next_bag_to_queue(self):
         next_pieces = list(range(7))
@@ -284,15 +312,43 @@ class Player(pygame.sprite.Sprite):
         if left != 0:
             if left * self._last_dir < 0:
                 self._das_load = 1
+                self._arr_load = 0
             elif self._das_load == 0:
                 self._das_load += 1
-            elif self._das_load < self.DAS_TRIGGER:
+            elif self._das_load < self.das:
                 self._das_load += 1
                 left = 0
         else:
             self._das_load = 0
+            self._arr_load = 0
+        # need to be done before arr calculation
         self._last_dir = left
-        # TODO take into account ARR and SD speed
+
+        if self._das_load >= self.das:
+            if self.arr == 0:
+                left = left * 10
+            elif self.arr < 1:
+                left = int(left / self.arr)
+            else:
+                self._arr_load += 1
+                if self._arr_load < int(self.arr):
+                    left = 0
+                else:
+                    self._arr_load = 0
+
+        if top > 0:
+            if self.sd == 0:
+                top = top * 30
+            elif self.sd < 1:
+                top = int(top / self.sd)
+            else:
+                self._sd_load += 1
+                if self._sd_load < int(self.sd):
+                    top = 0
+                else:
+                    self._sd_load = 0
+        else:
+            self._sd_load = 0
         new_cells = self.grid.move(left, top, self._cells)
         if new_cells != self._cells:
             self._cells = new_cells
@@ -362,6 +418,31 @@ class Player(pygame.sprite.Sprite):
             self.locked = True
 
         self._current_height = new_height
+
+    def clear_lines(self):
+        tspin = self.is_tspin()
+        mini = False if tspin else self.is_tspin_mini()
+        cleared_lines = self.grid.clear_lines()
+        perfect = self.grid.is_board_empty()
+
+        if cleared_lines > 0:
+            self._combo += 1
+        else:
+            self._combo = -1
+        if cleared_lines == 4 or (cleared_lines > 0 and (tspin or mini)):
+            self._back_to_back += 1
+        else:
+            self._back_to_back = -1
+        text = (
+            f"{'Perfect Clear ' if perfect else ''}"
+            f"{'T-spin ' if tspin else ''}"
+            f"{'T-spin mini ' if mini else ''}"
+            f"{['', 'Single', 'Double', 'Triple', 'Quad'][cleared_lines]}"
+            f" {'Back-to-back ' + str(self._back_to_back) if self._back_to_back > 0 else ''}"
+            f" {str(self._combo) + '-combo' if self._combo > 0 else ''}")
+        text = text.strip()
+        if text:
+            print(text)
 
     def go_down(self):
         """

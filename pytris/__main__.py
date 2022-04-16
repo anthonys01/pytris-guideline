@@ -41,8 +41,6 @@ if __name__ == "__main__":
     p = Player()
     p.set_next_from_queue()
     p.spawn_piece()
-    combo = 0
-    back_2_back = 0
     text = ''
     end = False
     go_down = False
@@ -67,8 +65,6 @@ if __name__ == "__main__":
             p.reset()
             p.set_next_from_queue()
             p.spawn_piece()
-            combo = 0
-            back_2_back = 0
             text = ''
             end = False
             go_down = False
@@ -78,28 +74,7 @@ if __name__ == "__main__":
 
         if not end:
             if p.locked:
-                tspin = p.is_tspin()
-                mini = False if tspin else p.is_tspin_mini()
-                cleared = p.grid.clear_lines()
-                perfect = p.grid.is_board_empty()
-                if cleared:
-                    if not tspin and cleared < 4:
-                        back_2_back = 0
-                    text = (
-                        f"{'Perfect Clear ' if perfect else ''}"
-                        f"{'T-spin ' if tspin else ''}"
-                        f"{'T-spin mini ' if mini else ''}"
-                        f"{['Single', 'Double', 'Triple', 'Quad'][cleared - 1]}"
-                        f" {'Back-to-back ' + str(back_2_back) if back_2_back else ''}"
-                        f" {str(combo) + '-combo' if combo else ''}")
-                    print(text)
-                    if tspin or cleared == 4 or mini:
-                        back_2_back += 1
-                    combo += 1
-                else:
-                    if tspin:
-                        text = "T-spin"
-                    combo = 0
+                p.clear_lines()
                 p.set_next_from_queue()
                 if not p.spawn_piece():
                     text = "END"
