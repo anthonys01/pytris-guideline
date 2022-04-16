@@ -12,19 +12,28 @@ class Grid(pygame.sprite.Sprite):
     """
         Grid containing the cells and minos
     """
+    HEIGHT = 22
+    WIDTH = 10
 
-    def __init__(self):
+    def __init__(self, margin_left: int, margin_top: int):
         super().__init__()
-        self.margin_top = 70
-        self.margin_left = 95
+        self.margin_top = margin_top
+        self.margin_left = margin_left
         self.block_size = 25
-        self.height = 22
-        self.width = 10
-        empty_line = [None] * self.width
-        self.grid: List[List[Cell]] = [empty_line[:] for _ in range(self.height)]
+
+        empty_line = [None] * self.WIDTH
+        self.grid: List[List[Cell]] = [empty_line[:] for _ in range(self.HEIGHT)]
         for line in self.grid:
-            for i in range(self.width):
+            for i in range(self.WIDTH):
                 line[i] = Cell()
+
+    def reset(self):
+        """
+            Reset all cells to empty
+        """
+        for line in self.grid:
+            for cell in line:
+                cell.cell_type = Cell.EMPTY
 
     def get_cell(self, pos: (int, int)) -> Optional[Cell]:
         """
@@ -33,7 +42,7 @@ class Grid(pygame.sprite.Sprite):
         :return: Ce
         """
         line, col = pos
-        if 0 <= line < self.height and 0 <= col < self.width:
+        if 0 <= line < self.HEIGHT and 0 <= col < self.WIDTH:
             return self.grid[line][col]
         return None
 
@@ -136,7 +145,7 @@ class Grid(pygame.sprite.Sprite):
         """
         to_clear = []
         cleared = []
-        for line in reversed(range(self.height)):
+        for line in reversed(range(self.HEIGHT)):
             clear = True
             for cell in self.grid[line]:
                 if cell.cell_type == cell.EMPTY:
@@ -163,8 +172,8 @@ class Grid(pygame.sprite.Sprite):
         """
             Draw the grid and its cells
         """
-        for col in range(0, self.width):
-            for line in range(0, self.height):
+        for col in range(0, self.WIDTH):
+            for line in range(0, self.HEIGHT):
                 rect = pygame.Rect(self.margin_left + col * self.block_size,
                                    self.margin_top + line * self.block_size,
                                    self.block_size + 1, self.block_size + 1)
