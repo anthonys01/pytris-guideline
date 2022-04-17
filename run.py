@@ -25,7 +25,7 @@ if __name__ == "__main__":
 
     km = KeyManager()
 
-    menu = MenuScreen(begin_size, win, display_surface, clock, gui_manager)
+    menu = MenuScreen(begin_size, win, display_surface, clock, gui_manager, km)
 
     while True:
         menu.init_ui()

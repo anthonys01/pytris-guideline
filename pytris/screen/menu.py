@@ -8,13 +8,15 @@ import pygame_gui
 from pygame.locals import *
 
 from pytris.gamemode import *
+from pytris.keymanager import KeyManager
+from pytris.screen.options import OptionsWindow
 
 
 class MenuScreen:
     """
         Main menu screen
     """
-    def __init__(self, size, window, display_surface, clock, gui_manager):
+    def __init__(self, size, window, display_surface, clock, gui_manager, key_manager: KeyManager):
         self.size = size
         self.gui_manager = gui_manager
         self.display_surface = display_surface
@@ -23,7 +25,9 @@ class MenuScreen:
         self.free_play_button = None
         self.sprint_button = None
         self.ultra_button = None
+        self.options_button = None
         self.game_mode = -1
+        self.key_manager = key_manager
 
     def init_ui(self):
         self.free_play_button = pygame_gui.elements.UIButton(
@@ -41,6 +45,11 @@ class MenuScreen:
             "ULTRA",
             self.gui_manager
         )
+        self.options_button = pygame_gui.elements.UIButton(
+            pygame.Rect(self.size[0] // 2 - 60, 5 * (self.size[1] // 10), 100, 50),
+            "OPTIONS",
+            self.gui_manager
+        )
 
     def run(self):
         display_menu = True
@@ -49,13 +58,29 @@ class MenuScreen:
             pygame.display.update()
             for event in pygame.event.get():
                 if event.type == pygame_gui.UI_BUTTON_PRESSED:
-                    display_menu = False
                     if event.ui_element == self.free_play_button:
+                        display_menu = False
                         self.game_mode = FREE_PLAY_MODE
                     elif event.ui_element == self.sprint_button:
+                        display_menu = False
                         self.game_mode = SPRINT_MODE
                     elif event.ui_element == self.ultra_button:
+                        display_menu = False
                         self.game_mode = ULTRA_MODE
+                    elif event.ui_element == self.options_button:
+                        self.free_play_button.disable()
+                        self.sprint_button.disable()
+                        self.ultra_button.disable()
+                        self.options_button.disable()
+
+                        options = OptionsWindow(self.size, self.win, self.display_surface,
+                                                self.clock, self.gui_manager, self.key_manager)
+                        options.init_ui()
+                        options.run()
+                        self.free_play_button.enable()
+                        self.sprint_button.enable()
+                        self.ultra_button.enable()
+                        self.options_button.enable()
                 if event.type == QUIT:
                     pygame.quit()
                     sys.exit()
@@ -71,3 +96,4 @@ class MenuScreen:
         self.free_play_button.hide()
         self.sprint_button.hide()
         self.ultra_button.hide()
+        self.options_button.hide()

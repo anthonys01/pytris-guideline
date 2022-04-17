@@ -23,6 +23,7 @@ class Key(str, Enum):
     ROT_180_KEY = "rotate_180"
     HOLD_KEY = "hold"
     RESET_KEY = "reset"
+    EXIT_KEY = "exit"
 
 
 class KeyManager:
@@ -52,12 +53,23 @@ class KeyManager:
                 Key.ROT_CCW_KEY: K_l,
                 Key.ROT_180_KEY: K_m,
                 Key.HOLD_KEY: K_SPACE,
-                Key.RESET_KEY: K_BACKSPACE
+                Key.RESET_KEY: K_BACKSPACE,
+                Key.EXIT_KEY: K_ESCAPE
             }
             print("No binding data was found, setting default values")
         else:
             for key, value in json_data.items():
                 self._enum_to_key_mapping[Key(key)] = value
+
+    def key_for(self, enum: Key) -> int:
+        """
+            return current key binding
+        """
+        return self._enum_to_key_mapping[enum]
+
+    def update_binding(self, enum: Key, key: int) -> bool:
+        self._enum_to_key_mapping[enum] = key
+        return self.save_settings(self._enum_to_key_mapping)
 
     def save_settings(self, bindings: Dict[Key, int]) -> bool:
         """

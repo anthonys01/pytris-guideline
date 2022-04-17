@@ -58,6 +58,10 @@ class SinglePlayerGameScreen:
 
             # need to update keyboard manager before updating player
             self.km.update()
+            if self.km.pressed[Key.EXIT_KEY]:
+                display_game = False
+                self._loop = False
+                continue
             if not reset and self.km.pressed[Key.RESET_KEY]:
                 # reset the game
                 self.player.reset()
