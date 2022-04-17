@@ -18,7 +18,7 @@ if __name__ == "__main__":
     display_surface = pygame.Surface(begin_size)
     clock = pygame.time.Clock()
     display_surface.fill((0, 0, 0))
-    pygame.display.set_caption("Pytris")
+    pygame.display.set_caption("Pytris - by Anthonys01")
 
     gui_manager = pygame_gui.UIManager(begin_size, "data/ui_theme.json")
     time_delta = 0
