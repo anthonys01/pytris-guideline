@@ -8,7 +8,7 @@ from pytris.keymanager import KeyManager
 from pytris.playersettings import PlayerSettings
 from pytris.screen.game1p import SinglePlayerGameScreen
 from pytris.screen.menu import MenuScreen
-
+from pytris.soundmanager import SoundManager
 
 if __name__ == "__main__":
     pygame.init()
@@ -26,15 +26,16 @@ if __name__ == "__main__":
 
     km = KeyManager()
     settings = PlayerSettings()
+    sound = SoundManager()
 
-    menu = MenuScreen(begin_size, win, display_surface, clock, gui_manager, km, settings)
+    menu = MenuScreen(begin_size, win, display_surface, clock, gui_manager, km, settings, sound)
 
     while True:
         menu.init_ui()
         menu.run()
 
         game = SinglePlayerGameScreen(begin_size, win, display_surface, clock,
-                                      gui_manager, km, settings, menu.game_mode)
+                                      gui_manager, km, settings, sound, menu.game_mode)
         game.init_ui()
         game.run()
 

@@ -15,6 +15,7 @@ from pytris.keymanager import KeyManager, Key
 from pytris.pieces import *
 from pytris.gamemode import *
 from pytris.playersettings import PlayerSettings
+from pytris.soundmanager import SoundManager
 
 
 class Player(pygame.sprite.Sprite):
@@ -66,7 +67,8 @@ class Player(pygame.sprite.Sprite):
     MOVING_TICKS_LOCK = 8
 
     def __init__(self, gui_manager: pygame_gui.UIManager,
-                 key_manager: KeyManager, settings: PlayerSettings, game_mode: int, seed: str = None):
+                 key_manager: KeyManager, settings: PlayerSettings, sound: SoundManager,
+                 game_mode: int, seed: str = None):
         super().__init__()
         self.player_ui_left = 0
         self.player_ui_top = 70
@@ -75,6 +77,7 @@ class Player(pygame.sprite.Sprite):
 
         self._key_manager = key_manager
         self.settings = settings
+        self.sound = sound
         self._gui_manager = gui_manager
         self._seed = seed
         self._randomizer = random.Random(self._seed)
@@ -366,6 +369,7 @@ class Player(pygame.sprite.Sprite):
             self.grid.get_cell(cell).cell_type = self.CELL[self._current_piece]
         self._cells = new_cells
         self._rotation = new_rotation
+        self.sound.play_rotate()
 
     def is_tspin(self) -> bool:
         """
@@ -435,6 +439,17 @@ class Player(pygame.sprite.Sprite):
         # 3 corners rule
         return sum(_is_used(corner) for corner in corners) >= 3
 
+    def _hit_wall(self, cells) -> int:
+        """
+            -1 hit left wall, 0 don't hit wall, +1 hit right wall
+        """
+        for cell in cells:
+            if cell[0] == 0:
+                return -1
+            if cell[0] == self.grid.WIDTH - 1:
+                return 1
+        return 0
+
     def _translate(self):
         top = 0
         left = 0
@@ -445,12 +460,16 @@ class Player(pygame.sprite.Sprite):
         if self._key_manager.pressing[Key.RIGHT_KEY]:
             left += 1
 
+        used_das = False
+        used_arr = False
+
         if left != 0:
             if left * self._last_dir < 0:
                 self._das_load = 1
                 self._arr_load = 0
             elif self._das_load == 0:
                 self._das_load += 1
+                used_das = True
             elif self._das_load < self.das:
                 self._das_load += 1
                 left = 0
@@ -465,12 +484,14 @@ class Player(pygame.sprite.Sprite):
                 left = left * 10
             elif self.arr < 1:
                 left = int(left / self.arr)
+                used_arr = True
             else:
                 self._arr_load += 1
                 if self._arr_load < int(self.arr):
                     left = 0
                 else:
                     self._arr_load = 0
+                    used_arr = True
 
         if top > 0:
             if self.sd == 0:
@@ -487,6 +508,12 @@ class Player(pygame.sprite.Sprite):
             self._sd_load = 0
         new_cells = self.grid.move(left, top, self._cells)
         if new_cells != self._cells:
+            if used_das:
+                self.sound.play_das()
+            elif used_arr:
+                self.sound.play_arr()
+            if self._hit_wall(self._cells) != self._hit_wall(new_cells):
+                self.sound.play_hit()
             self._cells = new_cells
             self._last_move = self.MOVE_TRANS
 
@@ -508,6 +535,7 @@ class Player(pygame.sprite.Sprite):
             for cell_pos in self._cells:
                 self.grid.get_cell(cell_pos).cell_type = Cell.EMPTY
             self._holt = True
+            self.sound.play_hold()
             self.spawn_piece()
             return
 
@@ -540,6 +568,8 @@ class Player(pygame.sprite.Sprite):
             self._wiggles_left = self.ALLOWED_WIGGLES
             self._locking_tick_unmoving_lock = self.UNMOVING_TICKS_LOCK
             self._locking_tick_moving_lock = self.MOVING_TICKS_LOCK
+            if self._is_on_top_of_something():
+                self.sound.play_softdrop()
         elif new_height < self._current_height:
             self._wiggles_left -= 1
         elif self._is_on_top_of_something() and self._wiggles_left == 0:
@@ -570,7 +600,7 @@ class Player(pygame.sprite.Sprite):
         clear_type = (
             f"{'T-spin ' if tspin else ''}"
             f"{'T-spin mini ' if mini else ''}"
-            f"{['', 'Single', 'Double', 'Triple', 'Quad'][cleared_lines]}")
+            f"{['', 'Single', 'Double', 'Triple', 'Quad'][cleared_lines]}").strip()
 
         if clear_type:
             self.other_stats[clear_type.strip()] += 1
@@ -582,13 +612,22 @@ class Player(pygame.sprite.Sprite):
             if perfect:
                 score_key = f"{'B2B ' if self._back_to_back > 0 else ''}Perfect Clear {clear_type}"
                 score_to_add = self.SCORE_TABLE[score_key]
+                self.sound.play_pc()
             else:
                 b2b_mult = self.SCORE_TABLE["B2B"] if self._back_to_back > 0 else 1
                 score_to_add = b2b_mult * self.SCORE_TABLE[clear_type]
+                if cleared_lines == 4:
+                    self.sound.play_quad()
+                elif tspin or mini:
+                    self.sound.play_tspin()
+                elif cleared_lines > 0:
+                    self.sound.play_clear()
             self.score += int((score_to_add + combo_add) * self.level)
             if perfect:
                 self.other_stats["Perfect Clears"] += 1
                 self._piece_nb_after_pc = 0
+        else:
+            self.sound.play_lock()
 
         back_to_back = f" {'Back-to-back ' + str(self._back_to_back) if self._back_to_back > 0 else ''}"
         text = clear_type + back_to_back

@@ -11,6 +11,7 @@ from pytris.gamemode import *
 from pytris.keymanager import KeyManager
 from pytris.playersettings import PlayerSettings
 from pytris.screen.options import OptionsWindow
+from pytris.soundmanager import SoundManager
 
 
 class MenuScreen:
@@ -18,7 +19,7 @@ class MenuScreen:
         Main menu screen
     """
     def __init__(self, size, window, display_surface, clock, gui_manager,
-                 key_manager: KeyManager, settings: PlayerSettings):
+                 key_manager: KeyManager, settings: PlayerSettings, sound: SoundManager):
         self.size = size
         self.gui_manager = gui_manager
         self.display_surface = display_surface
@@ -32,6 +33,7 @@ class MenuScreen:
         self.game_mode = -1
         self.key_manager = key_manager
         self.settings = settings
+        self.sound = sound
 
     def init_ui(self):
         self.free_play_button = pygame_gui.elements.UIButton(
@@ -87,7 +89,8 @@ class MenuScreen:
                         self.options_button.disable()
 
                         options = OptionsWindow(self.size, self.win, self.display_surface,
-                                                self.clock, self.gui_manager, self.key_manager, self.settings)
+                                                self.clock, self.gui_manager,
+                                                self.key_manager, self.settings, self.sound)
                         options.init_ui()
                         options.run()
                         self.free_play_button.enable()

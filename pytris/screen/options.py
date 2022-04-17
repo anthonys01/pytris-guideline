@@ -10,6 +10,7 @@ from pygame.locals import *
 
 from pytris.keymanager import Key, KeyManager
 from pytris.playersettings import PlayerSettings
+from pytris.soundmanager import SoundManager
 
 
 class OptionsWindow:
@@ -17,7 +18,7 @@ class OptionsWindow:
         Window to modify different player settings
     """
     def __init__(self, size, window, display_surface, clock, gui_manager,
-                 key_manager: KeyManager, settings: PlayerSettings):
+                 key_manager: KeyManager, settings: PlayerSettings, sound: SoundManager):
         self.size = size
         self.gui_manager = gui_manager
         self.display_surface = display_surface
@@ -26,6 +27,7 @@ class OptionsWindow:
         self.options_window: pygame_gui.elements.UIWindow = None
         self.key_manager = key_manager
         self.settings = settings
+        self.sound = sound
         self.key_to_button: Dict[Key, pygame_gui.elements.UIButton] = {}
         self.das_slider: pygame_gui.elements.UIHorizontalSlider = None
         self.das_text: pygame_gui.elements.UILabel = None
@@ -33,6 +35,8 @@ class OptionsWindow:
         self.arr_text: pygame_gui.elements.UILabel = None
         self.sdf_slider: pygame_gui.elements.UIHorizontalSlider = None
         self.sdf_text: pygame_gui.elements.UILabel = None
+        self.volume_slider: pygame_gui.elements.UIHorizontalSlider = None
+        self.volume_text: pygame_gui.elements.UILabel = None
         self._waiting_keypress = None
 
     def init_ui(self):
@@ -102,6 +106,25 @@ class OptionsWindow:
             self.gui_manager,
             container=self.options_window
         )
+        pygame_gui.elements.UILabel(
+            pygame.Rect(240, 160, 100, 30),
+            "VOLUME",
+            self.gui_manager,
+            container=self.options_window
+        )
+        self.volume_slider = pygame_gui.elements.UIHorizontalSlider(
+            pygame.Rect(220, 200, 150, 20),
+            int(self.sound.volume * 100),
+            (0, 100),
+            manager=self.gui_manager,
+            container=self.options_window
+        )
+        self.volume_text = pygame_gui.elements.UILabel(
+            pygame.Rect(370, 195, 35, 30),
+            str(int(self.sound.volume * 100)),
+            self.gui_manager,
+            container=self.options_window
+        )
         i = 0
         for key in Key:
             pygame_gui.elements.UILabel(
@@ -138,6 +161,9 @@ class OptionsWindow:
                     elif event.ui_element == self.sdf_slider:
                         self.settings.sdf = int(self.sdf_slider.get_current_value() * 10) / 10
                         self.sdf_text.set_text(str(self.settings.sdf))
+                    elif event.ui_element == self.volume_slider:
+                        self.sound.volume = self.volume_slider.get_current_value() / 100
+                        self.volume_text.set_text(str(int(self.sound.volume * 100)))
                 elif event.type == pygame_gui.UI_BUTTON_PRESSED:
                     for key, button in self.key_to_button.items():
                         if event.ui_element == button:
