@@ -170,13 +170,17 @@ class Grid(pygame.sprite.Sprite):
                     return False
         return True
 
-    def draw(self, surface):
+    def draw(self, surface, topped_out: bool):
         """
             Draw the grid and its cells
         """
+        gray = Cell(Cell.GARBAGE)
         for col in range(0, self.WIDTH):
             for line in range(0, self.HEIGHT):
                 rect = pygame.Rect(self.margin_left + col * self.block_size,
                                    self.margin_top + line * self.block_size,
                                    self.block_size + 1, self.block_size + 1)
-                self.grid[line][col].draw(surface, rect)
+                if topped_out and self.grid[line][col].cell_type != Cell.EMPTY:
+                    gray.draw(surface, rect)
+                else:
+                    self.grid[line][col].draw(surface, rect)

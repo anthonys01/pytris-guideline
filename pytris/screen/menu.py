@@ -27,6 +27,7 @@ class MenuScreen:
         self.free_play_button = None
         self.sprint_button = None
         self.ultra_button = None
+        self.pc_button = None
         self.options_button = None
         self.game_mode = -1
         self.key_manager = key_manager
@@ -48,8 +49,13 @@ class MenuScreen:
             "ULTRA",
             self.gui_manager
         )
-        self.options_button = pygame_gui.elements.UIButton(
+        self.pc_button = pygame_gui.elements.UIButton(
             pygame.Rect(self.size[0] // 2 - 60, 5 * (self.size[1] // 10), 100, 50),
+            "PC MODE",
+            self.gui_manager
+        )
+        self.options_button = pygame_gui.elements.UIButton(
+            pygame.Rect(self.size[0] // 2 - 60, 6 * (self.size[1] // 10), 100, 50),
             "OPTIONS",
             self.gui_manager
         )
@@ -70,10 +76,14 @@ class MenuScreen:
                     elif event.ui_element == self.ultra_button:
                         display_menu = False
                         self.game_mode = ULTRA_MODE
+                    elif event.ui_element == self.pc_button:
+                        display_menu = False
+                        self.game_mode = PC_MODE
                     elif event.ui_element == self.options_button:
                         self.free_play_button.disable()
                         self.sprint_button.disable()
                         self.ultra_button.disable()
+                        self.pc_button.disable()
                         self.options_button.disable()
 
                         options = OptionsWindow(self.size, self.win, self.display_surface,
@@ -83,6 +93,7 @@ class MenuScreen:
                         self.free_play_button.enable()
                         self.sprint_button.enable()
                         self.ultra_button.enable()
+                        self.pc_button.enable()
                         self.options_button.enable()
                 if event.type == QUIT:
                     pygame.quit()
@@ -99,4 +110,5 @@ class MenuScreen:
         self.free_play_button.hide()
         self.sprint_button.hide()
         self.ultra_button.hide()
+        self.pc_button.hide()
         self.options_button.hide()

@@ -135,6 +135,9 @@ class Player(pygame.sprite.Sprite):
         # last piece translation direction. 0 unmoving, negative left, positive right
         self._last_dir = 0
 
+        # number of used pieces after a clean board - used for PC mode
+        self._piece_nb_after_pc = 0
+
         # current ren combo
         self._combo = -1
         # current back to back
@@ -198,24 +201,24 @@ class Player(pygame.sprite.Sprite):
 
     @property
     def time(self) -> str:
-        if self.game_mode in (FREE_PLAY_MODE, SPRINT_MODE):
-            ms = self._time % 1000
-            total_secs = self._time // 1000
-            minutes = total_secs // 60
-            secs = total_secs % 60
-            return f"{minutes:0>2}:{secs:0>2}.{ms:0>3}"
-        elif self.game_mode == ULTRA_MODE:
+        if self.game_mode == ULTRA_MODE:
             time_left = 120000 - self._time
             ms = time_left % 1000
             total_secs = max(0, time_left // 1000)
             minutes = total_secs // 60
             secs = total_secs % 60
             return f"{minutes:0>2}:{secs:0>2}.{ms:0>3}"
-        return "00:00.000"
+        else:
+            ms = self._time % 1000
+            total_secs = self._time // 1000
+            minutes = total_secs // 60
+            secs = total_secs % 60
+            return f"{minutes:0>2}:{secs:0>2}.{ms:0>3}"
 
     def reset(self):
         self.grid.reset()
         self._randomizer = random.Random(self._seed)
+        self._piece_nb_after_pc = 0
         self.piece_nb = 0
         self._lines_cleared = 0
         self._queue = []
@@ -294,6 +297,9 @@ class Player(pygame.sprite.Sprite):
             if self.grid.get_cell(pos).cell_type != Cell.EMPTY:
                 self.topped_out = True
                 return False
+        if self.game_mode == PC_MODE and self._piece_nb_after_pc >= 10:
+            self.topped_out = True
+            return False
         for pos in spawn_cells:
             self.grid.get_cell(pos).cell_type = self.CELL[self._current_piece]
         self._cells = spawn_cells
@@ -546,6 +552,7 @@ class Player(pygame.sprite.Sprite):
             Actions to do after a piece was locked
         """
         self.piece_nb += 1
+        self._piece_nb_after_pc += 1
         tspin = self.is_tspin()
         mini = False if tspin else self.is_tspin_mini()
         cleared_lines = self.grid.clear_lines()
@@ -581,6 +588,7 @@ class Player(pygame.sprite.Sprite):
             self.score += int((score_to_add + combo_add) * self.level)
             if perfect:
                 self.other_stats["Perfect Clears"] += 1
+                self._piece_nb_after_pc = 0
 
         back_to_back = f" {'Back-to-back ' + str(self._back_to_back) if self._back_to_back > 0 else ''}"
         text = clear_type + back_to_back
@@ -662,6 +670,15 @@ class Player(pygame.sprite.Sprite):
                 f"<br><b>Time Left</b>"
                 f"<br>{self.time}"
             )
+        elif self.game_mode == PC_MODE:
+            return (
+                f"<b>Perfect Clears</b>"
+                f"<br>{self.other_stats['Perfect Clears']}"
+                f"<br><b>Pieces</b>"
+                f"<br>{self.piece_nb}"
+                f"<br><b>Time</b>"
+                f"<br>{self.time}"
+            )
         return ""
 
     def _get_score_text(self) -> str:
@@ -680,7 +697,7 @@ class Player(pygame.sprite.Sprite):
         self._score_textbox.set_text(self._get_score_text())
 
         # GRID
-        self.grid.draw(surface)
+        self.grid.draw(surface, self.topped_out)
 
         # HOLD
         rect = pygame.Rect(self.grid.margin_left - 85, self.grid.margin_top, 73, 73)
