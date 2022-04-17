@@ -32,6 +32,29 @@ class Player(pygame.sprite.Sprite):
         T_PIECE: (0, 3)
     }
 
+    SCORE_TABLE = {
+        "T-spin": 400,
+        "T-spin mini": 100,
+        "T-spin Single": 800,
+        "T-spin Double": 1200,
+        "T-spin Triple": 1600,
+        "T-spin mini Single": 200,
+        "T-spin mini Double": 1200,
+        "Single": 100,
+        "Double": 300,
+        "Triple": 500,
+        "Quad": 800,
+        "Perfect Clear Single": 800,
+        "Perfect Clear Double": 1200,
+        "Perfect Clear Triple": 1800,
+        "Perfect Clear Quad": 2000,
+        "B2B Perfect Clear Quad": 3200,
+        "B2B": 1.5,
+        "HD": 1,
+        "SD": 2,
+        "Combo": 50
+    }
+
     MOVE_ROT = "rotation"
     MOVE_KICK = "wall_kick"
     MOVE_TST_KICK = "tst_fin_kick"
@@ -46,7 +69,7 @@ class Player(pygame.sprite.Sprite):
         self.player_ui_left = 0
         self.player_ui_top = 70
 
-        self._game_mode = game_mode
+        self.game_mode = game_mode
 
         self._key_manager = key_manager
         self._gui_manager = gui_manager
@@ -58,7 +81,9 @@ class Player(pygame.sprite.Sprite):
         # if current piece is not movable by the player
         self.locked = False
 
-        self._topped_out = False
+        self.topped_out = False
+
+        self.level = 1
 
         # das trigger. start using arr once das_load >= das
         self.das: int = 6
@@ -112,7 +137,7 @@ class Player(pygame.sprite.Sprite):
         # current back to back
         self._back_to_back = -1
         # current score
-        self.score = 0
+        self.score: int = 0
 
         # number of pieces used - for stats
         self.piece_nb = 0
@@ -170,16 +195,16 @@ class Player(pygame.sprite.Sprite):
 
     @property
     def time(self) -> str:
-        if self._game_mode in (FREE_PLAY_MODE, SPRINT_MODE):
+        if self.game_mode in (FREE_PLAY_MODE, SPRINT_MODE):
             ms = self._time % 1000
             total_secs = self._time // 1000
             minutes = total_secs // 60
             secs = total_secs % 60
             return f"{minutes:0>2}:{secs:0>2}.{ms:0>3}"
-        elif self._game_mode == ULTRA_MODE:
+        elif self.game_mode == ULTRA_MODE:
             time_left = 120000 - self._time
             ms = time_left % 1000
-            total_secs = time_left // 1000
+            total_secs = max(0, time_left // 1000)
             minutes = total_secs // 60
             secs = total_secs % 60
             return f"{minutes:0>2}:{secs:0>2}.{ms:0>3}"
@@ -200,7 +225,7 @@ class Player(pygame.sprite.Sprite):
         self._sd_load = 0
         self.score = 0
         self._time = 0
-        self._topped_out = False
+        self.topped_out = False
         self._damage_textbox.set_text("")
         self._combo_textbox.set_text("")
         self._perfect_clear_textbox.set_text("")
@@ -226,11 +251,11 @@ class Player(pygame.sprite.Sprite):
         self.spawn_piece()
 
     def game_finished(self) -> bool:
-        if self._topped_out:
+        if self.topped_out:
             return True
-        if self._game_mode == SPRINT_MODE:
+        if self.game_mode == SPRINT_MODE:
             return self._lines_cleared >= 40
-        if self._game_mode == ULTRA_MODE:
+        if self.game_mode == ULTRA_MODE:
             return 120000 - self._time <= 0
         return False
 
@@ -264,7 +289,7 @@ class Player(pygame.sprite.Sprite):
         spawn_cells = self._get_spawn_cells(self._current_piece)
         for pos in spawn_cells:
             if self.grid.get_cell(pos).cell_type != Cell.EMPTY:
-                self._topped_out = True
+                self.topped_out = True
                 return False
         for pos in spawn_cells:
             self.grid.get_cell(pos).cell_type = self.CELL[self._current_piece]
@@ -479,6 +504,8 @@ class Player(pygame.sprite.Sprite):
 
         if self._key_manager.pressed[Key.HD_KEY]:
             self._cells = self.grid.move(0, self.grid.HEIGHT, self._cells)
+            height = self._get_max_height(*self._cells)
+            self.score += self.SCORE_TABLE["HD"] * (height - self._current_height)
             self.locked = True
             return
 
@@ -499,6 +526,7 @@ class Player(pygame.sprite.Sprite):
 
         new_height = self._get_max_height(*self._cells)
         if new_height > self._max_height:
+            self.score += self.SCORE_TABLE["SD"] * (new_height - self._current_height)
             self._max_height = new_height
             self._wiggles_left = self.ALLOWED_WIGGLES
             self._locking_tick_unmoving_lock = self.UNMOVING_TICKS_LOCK
@@ -538,8 +566,18 @@ class Player(pygame.sprite.Sprite):
             self.other_stats[clear_type.strip()] += 1
             self.other_stats["Max Back-to-Back"] = max(self.other_stats["Max Back-to-Back"], self._back_to_back)
             self.other_stats["Max combo"] = max(self.other_stats["Max combo"], self._combo)
-        if perfect:
-            self.other_stats["Perfect Clears"] += 1
+
+            score_to_add = 0
+            combo_add = self.SCORE_TABLE["Combo"] if self._combo > 0 else 0
+            if perfect:
+                score_key = f"{'B2B ' if self._back_to_back > 0 else ''}Perfect Clear {clear_type}"
+                score_to_add = self.SCORE_TABLE[score_key]
+            else:
+                b2b_mult = self.SCORE_TABLE["B2B"] if self._back_to_back > 0 else 1
+                score_to_add = b2b_mult * self.SCORE_TABLE[clear_type]
+            self.score += int((score_to_add + combo_add) * self.level)
+            if perfect:
+                self.other_stats["Perfect Clears"] += 1
 
         back_to_back = f" {'Back-to-back ' + str(self._back_to_back) if self._back_to_back > 0 else ''}"
         text = clear_type + back_to_back
@@ -589,15 +627,15 @@ class Player(pygame.sprite.Sprite):
             to_draw.draw(surface, rect)
 
     def _get_stats_text(self) -> str:
-        if self._game_mode == FREE_PLAY_MODE:
+        if self.game_mode == FREE_PLAY_MODE:
             return (
                 f"<br><br>"
                 f"<br><b>Lines</b>"
                 f"<br>{self._lines_cleared}"
                 f"<br><b>Time</b>"
-                f"<br>{self.get_time()}"
+                f"<br>{self.time}"
             )
-        elif self._game_mode == SPRINT_MODE:
+        elif self.game_mode == SPRINT_MODE:
             pps = 0
             if self._time > 0:
                 pps = 1000 * self.piece_nb / self._time
@@ -609,7 +647,7 @@ class Player(pygame.sprite.Sprite):
                 f"<br><b>Time</b>"
                 f"<br>{self.time}"
            )
-        elif self._game_mode == ULTRA_MODE:
+        elif self.game_mode == ULTRA_MODE:
             pps = 0
             if self._time > 0:
                 pps = 1000 * self.piece_nb / self._time
@@ -624,7 +662,7 @@ class Player(pygame.sprite.Sprite):
         return ""
 
     def _get_score_text(self) -> str:
-        if self._game_mode == ULTRA_MODE:
+        if self.game_mode == ULTRA_MODE:
             return (
                 f"<b>Score</b>"
                 f"<br>{self.score}"
