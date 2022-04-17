@@ -78,8 +78,7 @@ if __name__ == "__main__":
         pygame.time.set_timer(GRAVITY_TICK_EVENT, 1000)
         pygame.time.set_timer(LOCK_TICK_EVENT, 500)
         p = Player(gui_manager, km, game_mode)
-        p.set_next_from_queue()
-        p.spawn_piece()
+        p.start()
         text = ''
         go_down = False
         lock_tick = False
@@ -102,8 +101,7 @@ if __name__ == "__main__":
             if not reset and km.pressed[Key.RESET_KEY]:
                 # reset the game
                 p.reset()
-                p.set_next_from_queue()
-                p.spawn_piece()
+                p.start()
                 go_down = False
                 reset = True
             elif not km.pressed[Key.RESET_KEY]:
@@ -168,9 +166,23 @@ if __name__ == "__main__":
                 'bottom': 'bottom',
             }
         )
-        result_textbox = pygame_gui.elements.UITextBox(
-            "bruhhhhhhhhhhh<br>bruh<br><br><br><br>bruh",
-            pygame.Rect(10, 10, 130, 250),
+        text1 = f"Time : {p.time}<br><br>Pieces used : {p.piece_nb}"
+        stats = list(p.other_stats)
+        for stat in stats[:7]:
+            text1 += f"<br>{stat} : {p.other_stats[stat]}"
+        text2 = f"PPS : {p.pps}<br><br>"
+        for stat in stats[7:]:
+            text2 += f"<br>{stat} : {p.other_stats[stat]}"
+
+        result_textbox_1 = pygame_gui.elements.UITextBox(
+            text1,
+            pygame.Rect(10, 10, 200, 350),
+            gui_manager,
+            container=result_window
+        )
+        result_textbox_2 = pygame_gui.elements.UITextBox(
+            text2,
+            pygame.Rect(220, 10, 200, 350),
             gui_manager,
             container=result_window
         )

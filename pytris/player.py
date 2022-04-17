@@ -115,11 +115,28 @@ class Player(pygame.sprite.Sprite):
         self.score = 0
 
         # number of pieces used - for stats
-        self._piece_nb = 0
+        self.piece_nb = 0
         # number of lines cleared - for stats
         self._lines_cleared = 0
         # time in ms - for stats
-        self.time: int = 0
+        self._time: int = 0
+        # misc stats
+        self.other_stats = {
+            "T-spin": 0,
+            "T-spin mini": 0,
+            "T-spin Single": 0,
+            "T-spin Double": 0,
+            "T-spin Triple": 0,
+            "T-spin mini Single": 0,
+            "T-spin mini Double": 0,
+            "Single": 0,
+            "Double": 0,
+            "Triple": 0,
+            "Quad": 0,
+            "Max combo": 0,
+            "Max Back-to-Back": 0,
+            "Perfect Clears": 0
+        }
 
         self._damage_textbox = pygame_gui.elements.UITextBox(
             "",
@@ -137,10 +154,41 @@ class Player(pygame.sprite.Sprite):
             self._get_score_text(),
             pygame.Rect(self.player_ui_left + 360, self.player_ui_top + 400, 90, 90), gui_manager)
 
+        self._perfect_clear_textbox = pygame_gui.elements.UILabel(
+            pygame.Rect(self.player_ui_left + 120, self.player_ui_top + 180, 200, 50),
+            "",
+            gui_manager,
+            object_id="perfect_clear"
+        )
+
+    @property
+    def pps(self) -> str:
+        pps = 0
+        if self._time > 0:
+            pps = 1000 * self.piece_nb / self._time
+        return f"{pps:.2f}"
+
+    @property
+    def time(self) -> str:
+        if self._game_mode in (FREE_PLAY_MODE, SPRINT_MODE):
+            ms = self._time % 1000
+            total_secs = self._time // 1000
+            minutes = total_secs // 60
+            secs = total_secs % 60
+            return f"{minutes:0>2}:{secs:0>2}.{ms:0>3}"
+        elif self._game_mode == ULTRA_MODE:
+            time_left = 120000 - self._time
+            ms = time_left % 1000
+            total_secs = time_left // 1000
+            minutes = total_secs // 60
+            secs = total_secs % 60
+            return f"{minutes:0>2}:{secs:0>2}.{ms:0>3}"
+        return "00:00.000"
+
     def reset(self):
         self.grid.reset()
         self._randomizer = random.Random(self._seed)
-        self._piece_nb = 0
+        self.piece_nb = 0
         self._lines_cleared = 0
         self._queue = []
         self._hold_piece = None
@@ -151,10 +199,31 @@ class Player(pygame.sprite.Sprite):
         self._arr_load = 0
         self._sd_load = 0
         self.score = 0
-        self.time = 0
+        self._time = 0
         self._topped_out = False
         self._damage_textbox.set_text("")
         self._combo_textbox.set_text("")
+        self._perfect_clear_textbox.set_text("")
+        self.other_stats = {
+            "T-spin": 0,
+            "T-spin mini": 0,
+            "T-spin Single": 0,
+            "T-spin Double": 0,
+            "T-spin Triple": 0,
+            "T-spin mini Single": 0,
+            "T-spin mini Double": 0,
+            "Single": 0,
+            "Double": 0,
+            "Triple": 0,
+            "Quad": 0,
+            "Max combo": 0,
+            "Max Back-to-Back": 0,
+            "Perfect Clears": 0
+        }
+
+    def start(self):
+        self.set_next_from_queue()
+        self.spawn_piece()
 
     def game_finished(self) -> bool:
         if self._topped_out:
@@ -162,7 +231,7 @@ class Player(pygame.sprite.Sprite):
         if self._game_mode == SPRINT_MODE:
             return self._lines_cleared >= 40
         if self._game_mode == ULTRA_MODE:
-            return 120000 - self.time <= 0
+            return 120000 - self._time <= 0
         return False
 
     def _add_next_bag_to_queue(self):
@@ -391,7 +460,7 @@ class Player(pygame.sprite.Sprite):
         """
             Update piece position following user input
         """
-        self.time += time_delta
+        self._time += time_delta
 
         if self.locked:
             return
@@ -445,7 +514,7 @@ class Player(pygame.sprite.Sprite):
         """
             Actions to do after a piece was locked
         """
-        self._piece_nb += 1
+        self.piece_nb += 1
         tspin = self.is_tspin()
         mini = False if tspin else self.is_tspin_mini()
         cleared_lines = self.grid.clear_lines()
@@ -460,16 +529,26 @@ class Player(pygame.sprite.Sprite):
             self._back_to_back += 1
         elif cleared_lines > 0:
             self._back_to_back = -1
-        text = (
+        clear_type = (
             f"{'T-spin ' if tspin else ''}"
             f"{'T-spin mini ' if mini else ''}"
-            f"{['', 'Single', 'Double', 'Triple', 'Quad'][cleared_lines]}"
-            f" {'Back-to-back ' + str(self._back_to_back) if self._back_to_back > 0 else ''}")
+            f"{['', 'Single', 'Double', 'Triple', 'Quad'][cleared_lines]}")
+
+        if clear_type:
+            self.other_stats[clear_type.strip()] += 1
+            self.other_stats["Max Back-to-Back"] = max(self.other_stats["Max Back-to-Back"], self._back_to_back)
+            self.other_stats["Max combo"] = max(self.other_stats["Max combo"], self._combo)
+        if perfect:
+            self.other_stats["Perfect Clears"] += 1
+
+        back_to_back = f" {'Back-to-back ' + str(self._back_to_back) if self._back_to_back > 0 else ''}"
+        text = clear_type + back_to_back
 
         combo = f"{str(self._combo) + ' REN' if self._combo > 0 else ''}"
         text = text.strip()
         self._damage_textbox.set_text(text)
         self._combo_textbox.set_text(combo)
+        self._perfect_clear_textbox.set_text("PERFECT CLEAR" if perfect else "")
 
     def go_down(self):
         """
@@ -511,49 +590,36 @@ class Player(pygame.sprite.Sprite):
 
     def _get_stats_text(self) -> str:
         if self._game_mode == FREE_PLAY_MODE:
-            ms = self.time % 1000
-            total_secs = self.time // 1000
-            minutes = total_secs // 60
-            secs = total_secs % 60
             return (
                 f"<br><br>"
                 f"<br><b>Lines</b>"
                 f"<br>{self._lines_cleared}"
                 f"<br><b>Time</b>"
-                f"<br>{minutes:0>2}:{secs:0>2}.{ms:0>3}"
+                f"<br>{self.get_time()}"
             )
         elif self._game_mode == SPRINT_MODE:
-            ms = self.time % 1000
-            total_secs = self.time // 1000
-            minutes = total_secs // 60
-            secs = total_secs % 60
             pps = 0
-            if self.time > 0:
-                pps = 1000 * self._piece_nb / self.time
+            if self._time > 0:
+                pps = 1000 * self.piece_nb / self._time
             return (
                 f"<b>PPS</b>"
                 f"<br>{pps:.2f}"
                 f"<br><b>Lines</b>"
                 f"<br>{self._lines_cleared:0>2}/40"
                 f"<br><b>Time</b>"
-                f"<br>{minutes:0>2}:{secs:0>2}.{ms:0>3}"
-            )
+                f"<br>{self.time}"
+           )
         elif self._game_mode == ULTRA_MODE:
-            time_left = 120000 - self.time
-            ms = time_left % 1000
-            total_secs = time_left // 1000
-            minutes = total_secs // 60
-            secs = total_secs % 60
             pps = 0
-            if self.time > 0:
-                pps = 1000 * self._piece_nb / self.time
+            if self._time > 0:
+                pps = 1000 * self.piece_nb / self._time
             return (
                 f"<b>PPS</b>"
                 f"<br>{pps:.2f}"
                 f"<br><b>Lines</b>"
                 f"<br>{self._lines_cleared}"
                 f"<br><b>Time Left</b>"
-                f"<br>{minutes:0>2}:{secs:0>2}.{ms:0>3}"
+                f"<br>{self.time}"
             )
         return ""
 
