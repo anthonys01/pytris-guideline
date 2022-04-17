@@ -67,20 +67,17 @@ class KeyManager:
         """
         return self._enum_to_key_mapping[enum]
 
-    def update_binding(self, enum: Key, key: int) -> bool:
+    def update_binding(self, enum: Key, key: int):
         self._enum_to_key_mapping[enum] = key
-        return self.save_settings(self._enum_to_key_mapping)
+        self._save_settings(self._enum_to_key_mapping)
 
-    def save_settings(self, bindings: Dict[Key, int]) -> bool:
+    def _save_settings(self, bindings: Dict[Key, int]):
         """
             Save given bindings and apply it
         """
-        if os.path.exists(self.KEYBIND_FILE_PATH):
-            with open(self.KEYBIND_FILE_PATH, "w") as f:
-                json.dump(bindings, f)
-                self._enum_to_key_mapping = dict(bindings)
-            return True
-        return False
+        with open(self.KEYBIND_FILE_PATH, "w") as f:
+            json.dump(bindings, f)
+            self._enum_to_key_mapping = dict(bindings)
 
     @property
     def pressed(self) -> Dict[Key, bool]:

@@ -14,6 +14,7 @@ from pytris.grid import Grid
 from pytris.keymanager import KeyManager, Key
 from pytris.pieces import *
 from pytris.gamemode import *
+from pytris.playersettings import PlayerSettings
 
 
 class Player(pygame.sprite.Sprite):
@@ -64,7 +65,8 @@ class Player(pygame.sprite.Sprite):
     UNMOVING_TICKS_LOCK = 2
     MOVING_TICKS_LOCK = 8
 
-    def __init__(self, gui_manager: pygame_gui.UIManager, key_manager: KeyManager, game_mode: int, seed: str = None):
+    def __init__(self, gui_manager: pygame_gui.UIManager,
+                 key_manager: KeyManager, settings: PlayerSettings, game_mode: int, seed: str = None):
         super().__init__()
         self.player_ui_left = 0
         self.player_ui_top = 70
@@ -72,6 +74,7 @@ class Player(pygame.sprite.Sprite):
         self.game_mode = game_mode
 
         self._key_manager = key_manager
+        self.settings = settings
         self._gui_manager = gui_manager
         self._seed = seed
         self._randomizer = random.Random(self._seed)
@@ -86,19 +89,19 @@ class Player(pygame.sprite.Sprite):
         self.level = 1
 
         # das trigger. start using arr once das_load >= das
-        self.das: int = 6
+        self.das: int = settings.das
 
         # arr == 0 -> immediate
         # 0 < arr < 1 -> each frame move int(1 / arr) cell
         # arr >= 1 move 1 block each int(arr) frame
-        self.arr: float = 0
+        self.arr: float = settings.arr
         # used if arr >= 1
         self._arr_load = 0
 
         # sd == 0 -> immediate
         # 0 < sd < 1 -> each frame move int(1 / sd) cell
         # sd >= 1 move 1 block each int(sd) frame
-        self.sd: float = 0
+        self.sd: float = settings.sdf
         # used if sd >= 1
         self._sd_load = 0
 

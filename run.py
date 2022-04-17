@@ -5,6 +5,7 @@ import pygame
 import pygame_gui
 
 from pytris.keymanager import KeyManager
+from pytris.playersettings import PlayerSettings
 from pytris.screen.game1p import SinglePlayerGameScreen
 from pytris.screen.menu import MenuScreen
 
@@ -24,14 +25,16 @@ if __name__ == "__main__":
     game_mode = -1
 
     km = KeyManager()
+    settings = PlayerSettings()
 
-    menu = MenuScreen(begin_size, win, display_surface, clock, gui_manager, km)
+    menu = MenuScreen(begin_size, win, display_surface, clock, gui_manager, km, settings)
 
     while True:
         menu.init_ui()
         menu.run()
 
-        game = SinglePlayerGameScreen(begin_size, win, display_surface, clock, gui_manager, km, menu.game_mode)
+        game = SinglePlayerGameScreen(begin_size, win, display_surface, clock,
+                                      gui_manager, km, settings, menu.game_mode)
         game.init_ui()
         game.run()
 
