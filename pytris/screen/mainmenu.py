@@ -10,11 +10,12 @@ from pygame.locals import *
 from pytris.gamemode import *
 from pytris.keymanager import KeyManager
 from pytris.playersettings import PlayerSettings
+from pytris.screen.constants import ONLINE_MENU, OFFLINE_MENU
 from pytris.screen.options import OptionsWindow
 from pytris.soundmanager import SoundManager
 
 
-class MenuScreen:
+class MainMenuScreen:
     """
         Main menu screen
     """
@@ -25,39 +26,27 @@ class MenuScreen:
         self.display_surface = display_surface
         self.clock = clock
         self.win = window
-        self.free_play_button = None
-        self.sprint_button = None
-        self.ultra_button = None
-        self.pc_button = None
+        self.online_button = None
+        self.offline_button = None
         self.options_button = None
-        self.game_mode = -1
+        self.next_menu = -1
         self.key_manager = key_manager
         self.settings = settings
         self.sound = sound
 
     def init_ui(self):
-        self.free_play_button = pygame_gui.elements.UIButton(
-            pygame.Rect(self.size[0] // 2 - 60, 2 * (self.size[1] // 10), 100, 50),
-            "PRACTICE",
+        self.online_button = pygame_gui.elements.UIButton(
+            pygame.Rect(self.size[0] // 2 - 80, 3 * (self.size[1] // 10), 150, 50),
+            "ONLINE",
             self.gui_manager
         )
-        self.sprint_button = pygame_gui.elements.UIButton(
-            pygame.Rect(self.size[0] // 2 - 60, 3 * (self.size[1] // 10), 100, 50),
-            "SPRINT",
-            self.gui_manager
-        )
-        self.ultra_button = pygame_gui.elements.UIButton(
-            pygame.Rect(self.size[0] // 2 - 60, 4 * (self.size[1] // 10), 100, 50),
-            "ULTRA",
-            self.gui_manager
-        )
-        self.pc_button = pygame_gui.elements.UIButton(
-            pygame.Rect(self.size[0] // 2 - 60, 5 * (self.size[1] // 10), 100, 50),
-            "PC MODE",
+        self.offline_button = pygame_gui.elements.UIButton(
+            pygame.Rect(self.size[0] // 2 - 80, 4 * (self.size[1] // 10), 150, 50),
+            "OFFLINE MODES",
             self.gui_manager
         )
         self.options_button = pygame_gui.elements.UIButton(
-            pygame.Rect(self.size[0] // 2 - 60, 6 * (self.size[1] // 10), 100, 50),
+            pygame.Rect(self.size[0] // 2 - 80, 6 * (self.size[1] // 10), 150, 50),
             "OPTIONS",
             self.gui_manager
         )
@@ -69,23 +58,15 @@ class MenuScreen:
             pygame.display.update()
             for event in pygame.event.get():
                 if event.type == pygame_gui.UI_BUTTON_PRESSED:
-                    if event.ui_element == self.free_play_button:
+                    if event.ui_element == self.online_button:
                         display_menu = False
-                        self.game_mode = FREE_PLAY_MODE
-                    elif event.ui_element == self.sprint_button:
+                        self.next_menu = ONLINE_MENU
+                    elif event.ui_element == self.offline_button:
                         display_menu = False
-                        self.game_mode = SPRINT_MODE
-                    elif event.ui_element == self.ultra_button:
-                        display_menu = False
-                        self.game_mode = ULTRA_MODE
-                    elif event.ui_element == self.pc_button:
-                        display_menu = False
-                        self.game_mode = PC_MODE
+                        self.next_menu = OFFLINE_MENU
                     elif event.ui_element == self.options_button:
-                        self.free_play_button.disable()
-                        self.sprint_button.disable()
-                        self.ultra_button.disable()
-                        self.pc_button.disable()
+                        self.online_button.disable()
+                        self.offline_button.disable()
                         self.options_button.disable()
 
                         options = OptionsWindow(self.size, self.win, self.display_surface,
@@ -93,10 +74,8 @@ class MenuScreen:
                                                 self.key_manager, self.settings, self.sound)
                         options.init_ui()
                         options.run()
-                        self.free_play_button.enable()
-                        self.sprint_button.enable()
-                        self.ultra_button.enable()
-                        self.pc_button.enable()
+                        self.online_button.enable()
+                        self.offline_button.enable()
                         self.options_button.enable()
                 if event.type == QUIT:
                     pygame.quit()
@@ -110,8 +89,6 @@ class MenuScreen:
             self.win.blit(scaled, (0, 0))
             time_delta = self.clock.tick(60)
 
-        self.free_play_button.hide()
-        self.sprint_button.hide()
-        self.ultra_button.hide()
-        self.pc_button.hide()
+        self.online_button.hide()
+        self.offline_button.hide()
         self.options_button.hide()

@@ -17,6 +17,7 @@ class PlayerSettings:
         self._das = 10
         self._arr = 2
         self._sdf = 3
+        self._volume = 0.6
         if os.path.exists(self.SETTINGS_FILE_PATH):
             with open(self.SETTINGS_FILE_PATH, "r") as f:
                 data = json.load(f)
@@ -26,13 +27,16 @@ class PlayerSettings:
                     self._arr = data["ARR"]
                 if "SDF" in data:
                     self._sdf = data["SDF"]
+                if "volume" in data:
+                    self._volume = data["volume"]
 
     def _save_settings(self):
         with open(self.SETTINGS_FILE_PATH, "w") as f:
             json.dump({
                 "DAS": self._das,
                 "ARR": self._arr,
-                "SDF": self._sdf
+                "SDF": self._sdf,
+                "volume": self._volume
             }, f)
 
     @property
@@ -71,3 +75,13 @@ class PlayerSettings:
         else:
             self._sdf = new_sdf
         self._save_settings()
+
+    @property
+    def volume(self) -> float:
+        return self._volume
+
+    @volume.setter
+    def volume(self, new_volume: float):
+        if 0 <= new_volume <= 1:
+            self._volume = new_volume
+            self._save_settings()

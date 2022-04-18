@@ -3,13 +3,15 @@
 """
 import pygame.mixer
 
+from pytris.playersettings import PlayerSettings
+
 
 class SoundManager:
     """
         Class to manage game sound
     """
 
-    def __init__(self):
+    def __init__(self, settings: PlayerSettings):
         pygame.mixer.init()
         self.sound = [
             pygame.mixer.Sound("data/sound/arr.ogg"),
@@ -24,21 +26,12 @@ class SoundManager:
             pygame.mixer.Sound("data/sound/softdrop.ogg"),
             pygame.mixer.Sound("data/sound/tspin.ogg")
         ]
-        self._volume = 0.6
-
-    @property
-    def volume(self):
-        return self._volume
-
-    @volume.setter
-    def volume(self, new_volume: float):
-        if 0 <= new_volume <= 1:
-            self._volume = new_volume
+        self.settings = settings
 
     def _play(self, sound_index: int):
         ch = pygame.mixer.find_channel()
         if ch:
-            ch.set_volume(self._volume)
+            ch.set_volume(self.settings.volume)
             ch.play(self.sound[sound_index])
 
     def play_arr(self):

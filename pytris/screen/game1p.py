@@ -10,6 +10,7 @@ from pytris.keymanager import Key
 from pytris.player import Player
 from pytris.playersettings import PlayerSettings
 from pytris.screen.gameresult1p import SinglePlayerResultWindow
+from pytris.session import GameSession
 from pytris.soundmanager import SoundManager
 
 
@@ -30,7 +31,8 @@ class SinglePlayerGameScreen:
         self.sound = sound
         self.gravity_tick_event = pygame.event.custom_type()
         self.lock_tick_event = pygame.event.custom_type()
-        self.player = Player(self.gui_manager, self.km, self.settings, self.sound, self.game_mode)
+        self.session = GameSession()
+        self.player = Player(self.gui_manager, self.km, self.settings, self.sound, self.session, self.game_mode)
         self._result_window = SinglePlayerResultWindow(size, window, display_surface, clock, gui_manager, self.player)
         self._loop = True
 
@@ -67,8 +69,8 @@ class SinglePlayerGameScreen:
                 display_game = False
                 self._loop = False
                 continue
-            if not reset and self.km.pressed[Key.RESET_KEY]:
-                # reset the game
+            if not reset and self.km.pressed[Key.RESET_KEY] and self.session.session_id is None:
+                # reset the game (only local games)
                 self.player.reset()
                 self.player.start()
                 go_down = False
@@ -79,7 +81,7 @@ class SinglePlayerGameScreen:
             if not self.player.game_finished():
                 if self.player.locked:
                     self.player.clear_lines()
-                    self.player.set_next_from_queue()
+                    self.session.set_next_in_queue()
                     self.player.spawn_piece()
                 else:
                     if go_down:

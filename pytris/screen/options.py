@@ -38,6 +38,7 @@ class OptionsWindow:
         self.volume_slider: pygame_gui.elements.UIHorizontalSlider = None
         self.volume_text: pygame_gui.elements.UILabel = None
         self._waiting_keypress = None
+        self.playback_event = pygame.event.custom_type()
 
     def init_ui(self):
         res_window_size = (450, 500)
@@ -114,14 +115,14 @@ class OptionsWindow:
         )
         self.volume_slider = pygame_gui.elements.UIHorizontalSlider(
             pygame.Rect(220, 200, 150, 20),
-            int(self.sound.volume * 100),
+            int(self.settings.volume * 100),
             (0, 100),
             manager=self.gui_manager,
             container=self.options_window
         )
         self.volume_text = pygame_gui.elements.UILabel(
             pygame.Rect(370, 195, 35, 30),
-            str(int(self.sound.volume * 100)),
+            str(int(self.settings.volume * 100)),
             self.gui_manager,
             container=self.options_window
         )
@@ -148,6 +149,8 @@ class OptionsWindow:
         while display_options:
             pygame.display.update()
             for event in pygame.event.get():
+                if event.type == self.playback_event:
+                    self.sound.play_quad()
                 if event.type == pygame_gui.UI_WINDOW_CLOSE:
                     if event.ui_element == self.options_window:
                         display_options = False
@@ -162,8 +165,9 @@ class OptionsWindow:
                         self.settings.sdf = int(self.sdf_slider.get_current_value() * 10) / 10
                         self.sdf_text.set_text(str(self.settings.sdf))
                     elif event.ui_element == self.volume_slider:
-                        self.sound.volume = self.volume_slider.get_current_value() / 100
-                        self.volume_text.set_text(str(int(self.sound.volume * 100)))
+                        self.settings.volume = self.volume_slider.get_current_value() / 100
+                        self.volume_text.set_text(str(int(self.settings.volume * 100)))
+                        pygame.time.set_timer(self.playback_event, 200, 1)
                 elif event.type == pygame_gui.UI_BUTTON_PRESSED:
                     for key, button in self.key_to_button.items():
                         if event.ui_element == button:

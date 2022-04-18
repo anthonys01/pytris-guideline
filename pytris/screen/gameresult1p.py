@@ -8,10 +8,11 @@ import pygame_gui
 from pygame.locals import *
 
 from pytris.gamemode import SPRINT_MODE, ULTRA_MODE
+from pytris.player import Player
 
 
 class SinglePlayerResultWindow:
-    def __init__(self, size, window, display_surface, clock, gui_manager, player):
+    def __init__(self, size, window, display_surface, clock, gui_manager, player: Player):
         self.size = size
         self.gui_manager = gui_manager
         self.display_surface = display_surface
@@ -80,15 +81,16 @@ class SinglePlayerResultWindow:
         if self.player.game_mode == SPRINT_MODE:
             text = f"Time : {self.player.time}"
         elif self.player.game_mode == ULTRA_MODE:
-            text = f"Score : {self.player.score}"
+            text = f"Score : {self.player.session.score}"
 
-        text1 = f"{text}<br><br>Pieces used : {self.player.piece_nb}"
-        stats = list(self.player.other_stats)
+        text1 = f"{text}<br><br>Pieces used : {self.player.session.used_pieces}"
+        general_stats = self.player.session.get_general_stats()
+        stats = list(general_stats)
         for stat in stats[:7]:
-            text1 += f"<br>{stat} : {self.player.other_stats[stat]}"
+            text1 += f"<br>{stat} : {general_stats[stat]}"
         text2 = f"PPS : {self.player.pps}<br><br>"
         for stat in stats[7:]:
-            text2 += f"<br>{stat} : {self.player.other_stats[stat]}"
+            text2 += f"<br>{stat} : {general_stats[stat]}"
         self.result_textbox_1.set_text(text1)
         self.result_textbox_2.set_text(text2)
 

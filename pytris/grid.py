@@ -6,6 +6,7 @@ from typing import Optional, List, Tuple
 import pygame
 
 from pytris.cell import Cell
+from pytris.session import GameSession
 
 
 class Grid(pygame.sprite.Sprite):
@@ -15,36 +16,27 @@ class Grid(pygame.sprite.Sprite):
     HEIGHT = 22
     WIDTH = 10
 
-    def __init__(self, margin_left: int, margin_top: int):
+    def __init__(self, margin_left: int, margin_top: int, session: GameSession):
         super().__init__()
         self.margin_top = margin_top
         self.margin_left = margin_left
         self.block_size = 25
-
-        empty_line = [None] * self.WIDTH
-        self.grid: List[List[Cell]] = [empty_line[:] for _ in range(self.HEIGHT)]
-        for line in self.grid:
-            for i in range(self.WIDTH):
-                line[i] = Cell()
-
-    def reset(self):
-        """
-            Reset all cells to empty
-        """
-        for line in self.grid:
-            for cell in line:
-                cell.cell_type = Cell.EMPTY
+        self.session = session
 
     def get_cell(self, pos: (int, int)) -> Optional[Cell]:
         """
         Return cell if exists
         :param pos: cell position
-        :return: Ce
+        :return: Cell instance (read-only)
         """
         line, col = pos
         if 0 <= line < self.HEIGHT and 0 <= col < self.WIDTH:
-            return self.grid[line][col]
+            return Cell(self.session.grid[line][col])
         return None
+
+    def set_cell_type(self, cells: List[Tuple[int, int]], new_type: int):
+        for cell in cells:
+            self.session.grid[cell[0]][cell[1]] = new_type
 
     def get_hd_pos(self, cells_pos: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
         """
@@ -133,11 +125,10 @@ class Grid(pygame.sprite.Sprite):
 
         new_type = self.get_cell(cells_pos[0]).cell_type
 
-        for pos in cells_pos:
-            self.get_cell(pos).cell_type = Cell.EMPTY
-
-        for pos in cells_pos_to_return:
-            self.get_cell(pos).cell_type = new_type
+        if cells_pos != cells_pos_to_return:
+            self.set_cell_type(cells_pos, Cell.EMPTY)
+            self.set_cell_type(cells_pos_to_return, new_type)
+            self.session.send_to_server()
 
         return cells_pos_to_return
 
@@ -149,24 +140,26 @@ class Grid(pygame.sprite.Sprite):
         cleared = []
         for line in reversed(range(self.HEIGHT)):
             clear = True
-            for cell in self.grid[line]:
-                if cell.cell_type == cell.EMPTY:
+            for cell in self.session.grid[line]:
+                if cell == Cell.EMPTY:
                     clear = False
                     break
             if clear:
                 to_clear.append(line)
         for clear_line in to_clear:
-            cleared.append(self.grid.pop(clear_line))
+            cleared.append(self.session.grid.pop(clear_line))
         for line in cleared:
-            for cell in line:
-                cell.cell_type = Cell.EMPTY
-        self.grid = cleared + self.grid
+            for i in range(len(line)):
+                line[i] = Cell.EMPTY
+        self.session.grid = cleared + self.session.grid
+        if cleared:
+            self.session.send_to_server()
         return len(cleared)
 
     def is_board_empty(self) -> bool:
-        for line in self.grid:
+        for line in self.session.grid:
             for cell in line:
-                if cell.cell_type != Cell.EMPTY:
+                if cell != Cell.EMPTY:
                     return False
         return True
 
@@ -180,7 +173,7 @@ class Grid(pygame.sprite.Sprite):
                 rect = pygame.Rect(self.margin_left + col * self.block_size,
                                    self.margin_top + line * self.block_size,
                                    self.block_size + 1, self.block_size + 1)
-                if topped_out and self.grid[line][col].cell_type != Cell.EMPTY:
+                if topped_out and self.session.grid[line][col] != Cell.EMPTY:
                     gray.draw(surface, rect)
                 else:
-                    self.grid[line][col].draw(surface, rect)
+                    self.get_cell((line, col)).draw(surface, rect)
