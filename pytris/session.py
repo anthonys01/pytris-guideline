@@ -1,6 +1,7 @@
 """
     Represents a game session, local or online
 """
+import json
 import os
 import random
 from base64 import b64encode
@@ -12,6 +13,9 @@ class GameSession(ConnectionListener):
     """
         Game session, managing the session data state
     """
+
+    GAME_SERVER_FILE_PATH = "data/game_server.json"
+
     def __init__(self, session_id: str = None):
         self.session_id = session_id
 
@@ -25,11 +29,27 @@ class GameSession(ConnectionListener):
         self.timer = 0
         self.stats = {}
         self.grid = []
-        self.cells = []
 
         self.session_ready = False
         self.error_msg = None
+
+        self.server_addr = ("localhost", 4242)
+        if os.path.exists(self.GAME_SERVER_FILE_PATH):
+            address = "localhost"
+            port = 4242
+            with open(self.GAME_SERVER_FILE_PATH, "r") as f:
+                data = json.load(f)
+                if "address" in data:
+                    address = data["address"]
+                if "port" in data:
+                    port = data["port"]
+            self.server_addr = (address, port)
+
         self.load_from_server()
+
+    def exit_session(self):
+        if self.session_id is not None:
+            connection.Close()
 
     def get_general_stats(self) -> dict:
         general_stats = {
@@ -132,7 +152,6 @@ class GameSession(ConnectionListener):
         self.seed = b64encode(os.urandom(64)).decode('utf-8')
         self.randomizer = random.Random(self.seed)
         self.grid = [[0] * 10 for _ in range(22)]
-        self.cells = []
         self.stats = {
             "Level": 1,
             "Lines cleared": 0,
@@ -175,11 +194,11 @@ class GameSession(ConnectionListener):
             self._init_local_session()
             self.session_ready = True
         else:
-            self.Connect(("localhost", 4242))
+            self.Connect(self.server_addr)
             if self.session_id == "NEW_ID":
                 connection.Send({"action": "get_session_id"})
             else:
-                connection.Send({"action": "get_session", "session_id": self.session_id})
+                connection.Send({"action": "join_session", "session_id": self.session_id})
 
     def send_to_server(self):
         if self.session_id:
@@ -193,8 +212,7 @@ class GameSession(ConnectionListener):
                     "piece_count": self.piece_count,
                     "timer": self.timer,
                     "stats": self.stats,
-                    "grid": self.grid,
-                    "cells": self.cells
+                    "grid": self.grid
                 }
             })
 
@@ -222,6 +240,21 @@ class GameSession(ConnectionListener):
 
     def get_preview(self):
         return reversed(self.queue[-5:])
+
+    def topped_out(self):
+        if self.session_id:
+            connection.Send({"action": "top_out", "session_id": self.session_id})
+
+    def Network(self, data):
+        print(f"data received : {data}")
+
+    def Network_session_join(self, data_recv):
+        if "status" not in data_recv or data_recv["status"] != "OK":
+            print("an error occurred while trying to connect to session")
+            self.error_msg = data_recv["status"] if "status" in data_recv else "Unknown error"
+            return
+
+        connection.Send({"action": "get_session", "session_id": self.session_id})
 
     def Network_session_id(self, data):
         if "session_id" not in data:

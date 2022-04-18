@@ -87,7 +87,7 @@ class Player(pygame.sprite.Sprite):
         # if current piece is not movable by the player
         self.locked = False
 
-        self.topped_out = False
+        self._topped_out = False
 
         # das trigger. start using arr once das_load >= das
         self.das: int = settings.das
@@ -136,9 +136,10 @@ class Player(pygame.sprite.Sprite):
             "",
             pygame.Rect(self.player_ui_left, self.player_ui_top + 280, 90, 50), gui_manager)
 
+        move = 60 if self.game_mode == ONLINE_CHILL_PC_MODE else 0
         self._stats_textbox = pygame_gui.elements.UITextBox(
             self._get_stats_text(),
-            pygame.Rect(self.player_ui_left, self.player_ui_top + 330, 90, 200), gui_manager)
+            pygame.Rect(self.player_ui_left, self.player_ui_top + 330 - move, 90, 300), gui_manager)
 
         self._score_textbox = pygame_gui.elements.UITextBox(
             self._get_score_text(),
@@ -154,6 +155,16 @@ class Player(pygame.sprite.Sprite):
             gui_manager,
             object_id="perfect_clear"
         )
+
+    @property
+    def topped_out(self):
+        return self._topped_out
+
+    @topped_out.setter
+    def topped_out(self, topout):
+        if not self._topped_out and topout:
+            self.session.topped_out()
+        self._topped_out = topout
 
     @property
     def pps(self) -> str:
@@ -183,7 +194,7 @@ class Player(pygame.sprite.Sprite):
         self._das_load = 0
         self._arr_load = 0
         self._sd_load = 0
-        self.topped_out = False
+        self._topped_out = False
         self._damage_textbox.set_text("")
         self._combo_textbox.set_text("")
         self._perfect_clear_textbox.set_text("")
@@ -432,7 +443,6 @@ class Player(pygame.sprite.Sprite):
             Update piece position following user input
         """
         self.session.update_time(time_delta)
-        self.session.update()
 
         if self.locked:
             return
@@ -539,7 +549,7 @@ class Player(pygame.sprite.Sprite):
                 self.session.stats["Perfect Clears"] += 1
                 self.session.pieces_since_pc = 0
                 self.session.successive_pc += 1
-                self.session.max_successive_pc = max (self.session.max_successive_pc, self.session.successive_pc)
+                self.session.max_successive_pc = max(self.session.max_successive_pc, self.session.successive_pc)
         else:
             self.sound.play_lock()
             if self.session.pieces_since_pc >= 10:
@@ -553,6 +563,7 @@ class Player(pygame.sprite.Sprite):
         self._damage_textbox.set_text(text)
         self._combo_textbox.set_text(combo)
         self._perfect_clear_textbox.set_text("PERFECT CLEAR" if perfect else "")
+        self.session.current_piece = None
         self.session.send_to_server()
 
     def go_down(self):
@@ -635,10 +646,23 @@ class Player(pygame.sprite.Sprite):
                 f"<br><b>Time</b>"
                 f"<br>{self.time}"
             )
+        elif self.game_mode == ONLINE_CHILL_PC_MODE:
+            return (
+                f"<b>PCs</b>"
+                f"<br>{self.session.stats['Perfect Clears']}"
+                f"<br><b>Succ. PCs</b>"
+                f"<br>{self.session.successive_pc}"
+                f"<br><b>Max Succ. PCs</b>"
+                f"<br>{self.session.max_successive_pc}"
+                f"<br><b>Pieces</b>"
+                f"<br>{self.session.used_pieces}"
+                f"<br><b>Time</b>"
+                f"<br>{self.time}"
+            )
         return ""
 
     def _get_score_text(self) -> str:
-        if self.game_mode == ULTRA_MODE:
+        if self.game_mode in (ULTRA_MODE, ONLINE_CHILL_PC_MODE):
             return (
                 f"<b>Score</b>"
                 f"<br>{self.session.score}"
@@ -683,6 +707,8 @@ class Player(pygame.sprite.Sprite):
 
         # piece
         to_draw = Cell(self.CELL[self.session.current_piece])
+        if self.topped_out:
+            to_draw = Cell(Cell.GARBAGE)
         for cell_pos in self._cells:
             rect = pygame.Rect(self.grid.margin_left + cell_pos[1] * self.grid.block_size,
                                self.grid.margin_top + cell_pos[0] * self.grid.block_size,

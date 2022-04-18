@@ -27,11 +27,11 @@ class OnlineMenuScreen:
         self.clock = clock
         self.win = window
         self.game_mode = -1
-        self.new_pc_session_button: pygame_gui.elements.UIButton = None
         self.back_button: pygame_gui.elements.UIButton = None
         self.error_window: pygame_gui.elements.UIWindow = None
         self.prompt_textbox: pygame_gui.elements.UITextEntryLine = None
         self.join_pc_session_button: pygame_gui.elements.UIButton = None
+        self.session_join_text: pygame_gui.elements.UITextBox = None
         self.key_manager = key_manager
         self.settings = settings
         self.sound = sound
@@ -41,17 +41,17 @@ class OnlineMenuScreen:
     def init_ui(self):
         self.session = None
         self.game_mode = -1
-        self.new_pc_session_button = pygame_gui.elements.UIButton(
-            pygame.Rect(self.size[0] // 2 - 110, 2 * (self.size[1] // 10), 200, 50),
-            "NEW PC SESSION",
+        self.session_join_text = pygame_gui.elements.UITextBox(
+            "Enter a session ID and click join to create or join a PC session :",
+            pygame.Rect(self.size[0] // 2 - 150, 2 * (self.size[1] // 10), 300, 70),
             self.gui_manager
         )
         self.prompt_textbox = pygame_gui.elements.UITextEntryLine(
-            pygame.Rect(self.size[0] // 2 - 110, 3 * (self.size[1] // 10), 200, 30),
+            pygame.Rect(self.size[0] // 2 - 150, 3 * (self.size[1] // 10), 220, 30),
             self.gui_manager
         )
         self.join_pc_session_button = pygame_gui.elements.UIButton(
-            pygame.Rect(self.size[0] // 2 + 100, 3 * (self.size[1] // 10), 70, 30),
+            pygame.Rect(self.size[0] // 2 + 80, 3 * (self.size[1] // 10), 70, 30),
             "JOIN",
             self.gui_manager
         )
@@ -71,18 +71,9 @@ class OnlineMenuScreen:
                     if event.ui_element == self.error_window:
                         display_menu = False
                 elif event.type == pygame_gui.UI_BUTTON_PRESSED:
-                    if event.ui_element == self.new_pc_session_button:
-                        self.game_mode = ONLINE_CHILL_PC_MODE
-                        self.new_pc_session_button.disable()
-                        self.back_button.disable()
-                        self.prompt_textbox.disable()
-                        self.join_pc_session_button.disable()
-                        self.session = GameSession("NEW_ID")
-                        pygame.time.set_timer(self.session_timeout_event, 5000, 1)
-                    elif event.ui_element == self.join_pc_session_button:
+                    if event.ui_element == self.join_pc_session_button:
                         self.game_mode = ONLINE_CHILL_PC_MODE
                         session_id = self.prompt_textbox.get_text()
-                        self.new_pc_session_button.disable()
                         self.back_button.disable()
                         self.prompt_textbox.disable()
                         self.join_pc_session_button.disable()
@@ -119,7 +110,7 @@ class OnlineMenuScreen:
             self.win.blit(scaled, (0, 0))
             time_delta = self.clock.tick(60)
 
-        self.new_pc_session_button.hide()
+        self.session_join_text.hide()
         self.back_button.hide()
         self.prompt_textbox.hide()
         self.join_pc_session_button.hide()

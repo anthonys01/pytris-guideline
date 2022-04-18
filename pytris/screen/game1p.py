@@ -64,11 +64,14 @@ class SinglePlayerGameScreen:
                     sys.exit()
                 self.gui_manager.process_events(event)
 
+            self.session.update()
+
             # need to update keyboard manager before updating player
             self.km.update()
             if self.km.pressed[Key.EXIT_KEY]:
                 display_game = False
                 self._loop = False
+                self.session.exit_session()
                 continue
             if not reset and self.km.pressed[Key.RESET_KEY] and self.session.session_id is None:
                 # reset the game (only local games)
