@@ -82,7 +82,7 @@ class OnlineMenuScreen:
                     elif event.ui_element == self.back_button:
                         display_menu = False
                 elif event.type == self.session_timeout_event:
-                    if not self.session.session_ready:
+                    if self.session and not self.session.session_ready:
                         self.session.error_msg = "Request timeout"
                 elif event.type == QUIT:
                     pygame.quit()
