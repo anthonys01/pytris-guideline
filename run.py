@@ -9,6 +9,7 @@ from pytris.playersettings import PlayerSettings
 from pytris.screen.constants import OFFLINE_MENU, ONLINE_MENU
 from pytris.screen.game1p import SinglePlayerGameScreen
 from pytris.screen.mainmenu import MainMenuScreen
+from pytris.screen.onlinemenu import OnlineMenuScreen
 from pytris.screen.spmenu import SPMenuScreen
 from pytris.soundmanager import SoundManager
 
@@ -32,6 +33,7 @@ if __name__ == "__main__":
 
     main_menu = MainMenuScreen(begin_size, win, display_surface, clock, gui_manager, km, settings, sound)
     sp_menu = SPMenuScreen(begin_size, win, display_surface, clock, gui_manager, km, settings, sound)
+    online_menu = OnlineMenuScreen(begin_size, win, display_surface, clock, gui_manager, km, settings, sound)
 
     while True:
         main_menu.init_ui()
@@ -47,6 +49,14 @@ if __name__ == "__main__":
                 game.init_ui()
                 game.run()
         elif main_menu.next_menu == ONLINE_MENU:
-            ...
+            online_menu.init_ui()
+            online_menu.run()
+
+            if online_menu.game_mode >= 0:
+                game = SinglePlayerGameScreen(begin_size, win, display_surface, clock,
+                                              gui_manager, km, settings, sound,
+                                              online_menu.game_mode, online_menu.session)
+                game.init_ui()
+                game.run()
 
         gui_manager.clear_and_reset()

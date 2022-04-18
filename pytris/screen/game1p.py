@@ -6,7 +6,7 @@ import sys
 import pygame
 from pygame.locals import *
 
-from pytris.keymanager import Key
+from pytris.keymanager import Key, KeyManager
 from pytris.player import Player
 from pytris.playersettings import PlayerSettings
 from pytris.screen.gameresult1p import SinglePlayerResultWindow
@@ -19,7 +19,8 @@ class SinglePlayerGameScreen:
         Main single player game screen
     """
     def __init__(self, size, window, display_surface, clock, gui_manager,
-                 keyboard_manager, settings: PlayerSettings, sound: SoundManager, game_mode):
+                 keyboard_manager: KeyManager, settings: PlayerSettings, sound: SoundManager, game_mode: int,
+                 session: GameSession = None):
         self.size = size
         self.gui_manager = gui_manager
         self.display_surface = display_surface
@@ -31,7 +32,7 @@ class SinglePlayerGameScreen:
         self.sound = sound
         self.gravity_tick_event = pygame.event.custom_type()
         self.lock_tick_event = pygame.event.custom_type()
-        self.session = GameSession()
+        self.session = GameSession() if session is None else session
         self.player = Player(self.gui_manager, self.km, self.settings, self.sound, self.session, self.game_mode)
         self._result_window = SinglePlayerResultWindow(size, window, display_surface, clock, gui_manager, self.player)
         self._loop = True

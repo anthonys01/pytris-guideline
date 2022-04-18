@@ -144,6 +144,10 @@ class Player(pygame.sprite.Sprite):
             self._get_score_text(),
             pygame.Rect(self.player_ui_left + 360, self.player_ui_top + 400, 90, 90), gui_manager)
 
+        self._session_id_textbox = pygame_gui.elements.UITextBox(
+            "" if self.session.session_id is None else f"Session ID: {self.session.session_id}",
+            pygame.Rect(self.player_ui_left + 110, self.player_ui_top - 50, 250, 30), gui_manager)
+
         self._perfect_clear_textbox = pygame_gui.elements.UILabel(
             pygame.Rect(self.player_ui_left + 120, self.player_ui_top + 180, 200, 50),
             "",
@@ -215,7 +219,6 @@ class Player(pygame.sprite.Sprite):
         if self.game_mode == PC_MODE and self.session.pieces_since_pc >= 10:
             self.topped_out = True
             return False
-        self.grid.set_cell_type(spawn_cells, self.CELL[self.session.current_piece])
         self._cells = spawn_cells
         self.locked = False
         self._current_height = 1
@@ -274,8 +277,6 @@ class Player(pygame.sprite.Sprite):
         else:
             self._last_move = self.MOVE_KICK
 
-        self.grid.set_cell_type(self._cells, Cell.EMPTY)
-        self.grid.set_cell_type(new_cells, self.CELL[self.session.current_piece])
         self._cells = new_cells
         self._rotation = new_rotation
         self.sound.play_rotate()
@@ -443,7 +444,6 @@ class Player(pygame.sprite.Sprite):
             else:
                 self.session.hold_piece, self.session.current_piece = \
                     self.session.current_piece, self.session.hold_piece
-            self.grid.set_cell_type(self._cells, Cell.EMPTY)
             self.session.holt = True
             self.sound.play_hold()
             self.spawn_piece()
@@ -491,6 +491,9 @@ class Player(pygame.sprite.Sprite):
         """
             Actions to do after a piece was locked
         """
+        # write locked piece in grid
+        self.grid.set_cell_type(self._cells, self.CELL[self.session.current_piece])
+
         self.session.pieces_since_pc += 1
         tspin = self.is_tspin()
         mini = False if tspin else self.is_tspin_mini()
@@ -550,6 +553,7 @@ class Player(pygame.sprite.Sprite):
         self._damage_textbox.set_text(text)
         self._combo_textbox.set_text(combo)
         self._perfect_clear_textbox.set_text("PERFECT CLEAR" if perfect else "")
+        self.session.send_to_server()
 
     def go_down(self):
         """
@@ -676,6 +680,14 @@ class Player(pygame.sprite.Sprite):
                                   piece,
                                   preview_left - 28,
                                   self.grid.margin_top - 24 + number * 45)
+
+        # piece
+        to_draw = Cell(self.CELL[self.session.current_piece])
+        for cell_pos in self._cells:
+            rect = pygame.Rect(self.grid.margin_left + cell_pos[1] * self.grid.block_size,
+                               self.grid.margin_top + cell_pos[0] * self.grid.block_size,
+                               self.grid.block_size + 1, self.grid.block_size + 1)
+            to_draw.draw(surface, rect)
 
         # phantom
         phantom = self.grid.get_hd_pos(self._cells)

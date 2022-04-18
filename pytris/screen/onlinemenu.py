@@ -11,6 +11,7 @@ from pytris.gamemode import *
 from pytris.keymanager import KeyManager
 from pytris.playersettings import PlayerSettings
 from pytris.screen.options import OptionsWindow
+from pytris.session import GameSession
 from pytris.soundmanager import SoundManager
 
 
@@ -25,40 +26,38 @@ class OnlineMenuScreen:
         self.display_surface = display_surface
         self.clock = clock
         self.win = window
-        self.free_play_button = None
-        self.sprint_button = None
-        self.ultra_button = None
-        self.pc_button = None
-        self.options_button = None
         self.game_mode = -1
+        self.new_pc_session_button: pygame_gui.elements.UIButton = None
+        self.back_button: pygame_gui.elements.UIButton = None
+        self.error_window: pygame_gui.elements.UIWindow = None
+        self.prompt_textbox: pygame_gui.elements.UITextEntryLine = None
+        self.join_pc_session_button: pygame_gui.elements.UIButton = None
         self.key_manager = key_manager
         self.settings = settings
         self.sound = sound
+        self.session: GameSession = None
+        self.session_timeout_event = pygame.event.custom_type()
 
     def init_ui(self):
-        self.free_play_button = pygame_gui.elements.UIButton(
-            pygame.Rect(self.size[0] // 2 - 60, 2 * (self.size[1] // 10), 100, 50),
-            "PRACTICE",
+        self.session = None
+        self.game_mode = -1
+        self.new_pc_session_button = pygame_gui.elements.UIButton(
+            pygame.Rect(self.size[0] // 2 - 110, 2 * (self.size[1] // 10), 200, 50),
+            "NEW PC SESSION",
             self.gui_manager
         )
-        self.sprint_button = pygame_gui.elements.UIButton(
-            pygame.Rect(self.size[0] // 2 - 60, 3 * (self.size[1] // 10), 100, 50),
-            "SPRINT",
+        self.prompt_textbox = pygame_gui.elements.UITextEntryLine(
+            pygame.Rect(self.size[0] // 2 - 110, 3 * (self.size[1] // 10), 200, 30),
             self.gui_manager
         )
-        self.ultra_button = pygame_gui.elements.UIButton(
-            pygame.Rect(self.size[0] // 2 - 60, 4 * (self.size[1] // 10), 100, 50),
-            "ULTRA",
+        self.join_pc_session_button = pygame_gui.elements.UIButton(
+            pygame.Rect(self.size[0] // 2 + 100, 3 * (self.size[1] // 10), 70, 30),
+            "JOIN",
             self.gui_manager
         )
-        self.pc_button = pygame_gui.elements.UIButton(
-            pygame.Rect(self.size[0] // 2 - 60, 5 * (self.size[1] // 10), 100, 50),
-            "PC MODE",
-            self.gui_manager
-        )
-        self.options_button = pygame_gui.elements.UIButton(
-            pygame.Rect(self.size[0] // 2 - 60, 6 * (self.size[1] // 10), 100, 50),
-            "OPTIONS",
+        self.back_button = pygame_gui.elements.UIButton(
+            pygame.Rect(10, 10, 70, 30),
+            "BACK",
             self.gui_manager
         )
 
@@ -68,40 +67,50 @@ class OnlineMenuScreen:
         while display_menu:
             pygame.display.update()
             for event in pygame.event.get():
-                if event.type == pygame_gui.UI_BUTTON_PRESSED:
-                    if event.ui_element == self.free_play_button:
+                if event.type == pygame_gui.UI_WINDOW_CLOSE:
+                    if event.ui_element == self.error_window:
                         display_menu = False
-                        self.game_mode = FREE_PLAY_MODE
-                    elif event.ui_element == self.sprint_button:
+                elif event.type == pygame_gui.UI_BUTTON_PRESSED:
+                    if event.ui_element == self.new_pc_session_button:
+                        self.game_mode = ONLINE_CHILL_PC_MODE
+                        self.new_pc_session_button.disable()
+                        self.back_button.disable()
+                        self.prompt_textbox.disable()
+                        self.join_pc_session_button.disable()
+                        self.session = GameSession("NEW_ID")
+                        pygame.time.set_timer(self.session_timeout_event, 5000, 1)
+                    elif event.ui_element == self.join_pc_session_button:
+                        self.game_mode = ONLINE_CHILL_PC_MODE
+                        session_id = self.prompt_textbox.get_text()
+                        self.new_pc_session_button.disable()
+                        self.back_button.disable()
+                        self.prompt_textbox.disable()
+                        self.join_pc_session_button.disable()
+                        self.session = GameSession(session_id)
+                        pygame.time.set_timer(self.session_timeout_event, 5000, 1)
+                    elif event.ui_element == self.back_button:
                         display_menu = False
-                        self.game_mode = SPRINT_MODE
-                    elif event.ui_element == self.ultra_button:
-                        display_menu = False
-                        self.game_mode = ULTRA_MODE
-                    elif event.ui_element == self.pc_button:
-                        display_menu = False
-                        self.game_mode = PC_MODE
-                    elif event.ui_element == self.options_button:
-                        self.free_play_button.disable()
-                        self.sprint_button.disable()
-                        self.ultra_button.disable()
-                        self.pc_button.disable()
-                        self.options_button.disable()
-
-                        options = OptionsWindow(self.size, self.win, self.display_surface,
-                                                self.clock, self.gui_manager,
-                                                self.key_manager, self.settings, self.sound)
-                        options.init_ui()
-                        options.run()
-                        self.free_play_button.enable()
-                        self.sprint_button.enable()
-                        self.ultra_button.enable()
-                        self.pc_button.enable()
-                        self.options_button.enable()
-                if event.type == QUIT:
+                elif event.type == self.session_timeout_event:
+                    if not self.session.session_ready:
+                        self.session.error_msg = "Request timeout"
+                elif event.type == QUIT:
                     pygame.quit()
                     sys.exit()
                 self.gui_manager.process_events(event)
+
+            if self.session:
+                self.session.update()
+                if self.session.error_msg and self.error_window is None:
+                    self.game_mode = -1
+                    self.error_window = pygame_gui.windows.UIMessageWindow(
+                        pygame.Rect(self.size[0] // 2 - 140, self.size[1] // 2 - 150, 200, 200),
+                        self.session.error_msg,
+                        self.gui_manager,
+                        window_title="Server Error"
+                    )
+                elif self.session.session_ready:
+                    display_menu = False
+
             self.gui_manager.update(time_delta / 1000.0)
             self.display_surface.fill((150, 150, 150))
             self.gui_manager.draw_ui(self.display_surface)
@@ -110,8 +119,7 @@ class OnlineMenuScreen:
             self.win.blit(scaled, (0, 0))
             time_delta = self.clock.tick(60)
 
-        self.free_play_button.hide()
-        self.sprint_button.hide()
-        self.ultra_button.hide()
-        self.pc_button.hide()
-        self.options_button.hide()
+        self.new_pc_session_button.hide()
+        self.back_button.hide()
+        self.prompt_textbox.hide()
+        self.join_pc_session_button.hide()

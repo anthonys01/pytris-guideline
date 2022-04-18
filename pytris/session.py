@@ -25,8 +25,9 @@ class GameSession(ConnectionListener):
         self.timer = 0
         self.stats = {}
         self.grid = []
+        self.cells = []
 
-        self.is_session_ready = False
+        self.session_ready = False
         self.error_msg = None
         self.load_from_server()
 
@@ -131,6 +132,7 @@ class GameSession(ConnectionListener):
         self.seed = b64encode(os.urandom(64)).decode('utf-8')
         self.randomizer = random.Random(self.seed)
         self.grid = [[0] * 10 for _ in range(22)]
+        self.cells = []
         self.stats = {
             "Level": 1,
             "Lines cleared": 0,
@@ -171,10 +173,13 @@ class GameSession(ConnectionListener):
     def load_from_server(self):
         if self.session_id is None:
             self._init_local_session()
-            self.is_session_ready = True
+            self.session_ready = True
         else:
             self.Connect(("localhost", 4242))
-            connection.Send({"action": "get_session", "session_id": self.session_id})
+            if self.session_id == "NEW_ID":
+                connection.Send({"action": "get_session_id"})
+            else:
+                connection.Send({"action": "get_session", "session_id": self.session_id})
 
     def send_to_server(self):
         if self.session_id:
@@ -188,7 +193,8 @@ class GameSession(ConnectionListener):
                     "piece_count": self.piece_count,
                     "timer": self.timer,
                     "stats": self.stats,
-                    "grid": self.grid
+                    "grid": self.grid,
+                    "cells": self.cells
                 }
             })
 
@@ -217,6 +223,13 @@ class GameSession(ConnectionListener):
     def get_preview(self):
         return reversed(self.queue[-5:])
 
+    def Network_session_id(self, data):
+        if "session_id" not in data:
+            self.error_msg = data["status"] if "status" in data else "Unknown error"
+        else:
+            self.session_id = data["session_id"]
+            connection.Send({"action": "get_session", "session_id": self.session_id})
+
     def Network_session_data(self, data_recv):
         if "status" not in data_recv or data_recv["status"] != "OK":
             print("an error occurred while trying to connect to session")
@@ -232,4 +245,4 @@ class GameSession(ConnectionListener):
         self.stats = data["stats"]
         self.grid = data["grid"]
         self._reload_queue_and_randomizer()
-        self.is_session_ready = True
+        self.session_ready = True

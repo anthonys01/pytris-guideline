@@ -123,13 +123,6 @@ class Grid(pygame.sprite.Sprite):
         if correct_top == 0 and correct_left == 0:
             return cells_pos
 
-        new_type = self.get_cell(cells_pos[0]).cell_type
-
-        if cells_pos != cells_pos_to_return:
-            self.set_cell_type(cells_pos, Cell.EMPTY)
-            self.set_cell_type(cells_pos_to_return, new_type)
-            self.session.send_to_server()
-
         return cells_pos_to_return
 
     def clear_lines(self) -> int:
@@ -152,8 +145,6 @@ class Grid(pygame.sprite.Sprite):
             for i in range(len(line)):
                 line[i] = Cell.EMPTY
         self.session.grid = cleared + self.session.grid
-        if cleared:
-            self.session.send_to_server()
         return len(cleared)
 
     def is_board_empty(self) -> bool:

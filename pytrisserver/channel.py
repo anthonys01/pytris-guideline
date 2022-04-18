@@ -34,6 +34,7 @@ class ClientChannel(Channel):
             "hold_piece": None,
             "holt": False,
             "piece_count": 0,
+            "cells": [],
             "timer": 0,
             "stats": {
                 "Level": 1,
