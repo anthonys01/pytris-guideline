@@ -19,42 +19,65 @@ class PCFinder:
         ...
 
     @staticmethod
+    def hash_grid(grid_to_hash: BoolGrid) -> int:
+        res = 0
+        for line in grid_to_hash:
+            for cell in line:
+                res = (res << 1) + int(cell)
+        return res
+
+    @staticmethod
+    def hash_piece_pos(piece: int, rotation: int, position: PiecePos) -> int:
+        res = ((piece << 8) + rotation << 8)
+        for pos in position:
+            res = (res << 4) + 8 + pos[0]
+            res = (res << 4) + 15 + pos[1]
+        return res
+
+    @staticmethod
     def generate_possible_queue_combinations(queue: Queue, res_size: int) -> List[Queue]:
         """
             Possible pieces order by user hold. Only generate queues of given size
         """
         if res_size > len(queue):
             return []
-        if res_size == len(queue):
-            return [queue[:]]
 
         working_nodes = [[queue[:], [], []]]
 
-        finished = False
-        while not finished:
+        to_return = []
+
+        while True:
+            if not working_nodes:
+                break
             node = working_nodes.pop()
             if len(node[2]) == res_size:
-                working_nodes += [node]
-                finished = True
-                break
+                if node[2] not in to_return:
+                    to_return += [node[2]]
+                continue
             res = []
-            piece = node[0][0]
-            # place
-            res += [[node[0][1:], node[1][:], node[2] + [piece]]]
-            # hold and place
-            if not node[1]:
-                second_piece = node[0][1]
-                res += [[node[0][2:], [piece], node[2] + [second_piece]]]
+            if node[0]:
+                piece = node[0][0]
+                # place
+                res += [[node[0][1:], node[1][:], node[2] + [piece]]]
+                # hold and place
+                if not node[1]:
+                    if len(node[0]) > 1:
+                        second_piece = node[0][1]
+                        res += [[node[0][2:], [piece], node[2] + [second_piece]]]
+                    else:
+                        res += [[node[0][2:], [piece], node[2]]]
+                else:
+                    res += [[node[0][1:], [piece], node[2] + node[1]]]
             else:
-                res += [[node[0][1:], [piece], node[2] + node[1]]]
+                res += [[[], [], node[2] + node[1]]]
             working_nodes = res + working_nodes
 
-        return [node[2] for node in working_nodes]
+        return to_return
 
-    def is_reachable_for(self, piece: int, rotation: int, grid_state: BoolGrid,
-                         position: PiecePos,
-                         tested_positions: List[PiecePos]) \
-            -> Optional[List[PiecePos]]:
+    def is_reachable(self, piece: int, rotation: int, grid_state: BoolGrid,
+                     position: PiecePos,
+                     tested_positions: List[PiecePos]) \
+            -> Optional[PieceMov]:
         # no going back
         if position in tested_positions:
             return
@@ -73,8 +96,8 @@ class PCFinder:
         # transposition
         for t_line, t_column in ((-1, 0), (0, 1), (0, -1), (1, 0)):
             transposed = [(line + t_line, column + t_column) for line, column in position]
-            res_reachable = self.is_reachable_for(piece, rotation,
-                                                  grid_state, transposed, tested_positions)
+            res_reachable = self.is_reachable(piece, rotation,
+                                              grid_state, transposed, tested_positions)
             if res_reachable is not None:
                 return res_reachable + [position]
 
@@ -82,17 +105,12 @@ class PCFinder:
         for rot in (-1, 1, 2):
             res_cells = reverse_rotate(piece, position, grid_state, rotation, rot)
             if res_cells:
-                res_reachable = self.is_reachable_for(piece, (rotation - rot) % 4,
-                                                      grid_state, res_cells, tested_positions)
+                res_reachable = self.is_reachable(piece, (rotation - rot) % 4,
+                                                  grid_state, res_cells, tested_positions)
                 if res_reachable is not None:
                     return res_reachable + [position]
 
-    def is_reachable(self, piece: int, rotation: int, grid_state: BoolGrid,
-                     position: PiecePos) -> Optional[List]:
-        return self.is_reachable_for(piece, rotation, grid_state, position, [])
-
-    def apply_in_grid(self, grid_state: BoolGrid,
-                      pos: PiecePos) -> List[List[int]]:
+    def apply_in_grid(self, grid_state: BoolGrid, pos: PiecePos) -> BoolGrid:
         # apply and clear lines
         new_grid_state = [line[:] for line in grid_state]
         for cell in pos:
@@ -110,25 +128,23 @@ class PCFinder:
 
     def grids_after_placing(self, piece: int, grid_state: BoolGrid) \
             -> Iterable[Tuple[PieceMov, BoolGrid]]:
-        rot_pos = []
-
-        if piece == I_PIECE:
-            rot_pos = [[(0, 0), (0, 1), (0, 2), (0, 3)],
-                       [(0, 2), (1, 2), (2, 2), (3, 2)]]
-        elif piece in (S_PIECE, Z_PIECE):
-            rot_pos = PIECES_ROT[piece][:2]
-        else:
-            rot_pos = PIECES_ROT[piece]
+        rot_pos = PIECES_ROT[piece]
 
         for rot, piece_rot_pos in enumerate(rot_pos):
-            for line_index in reversed(range(len(grid_state))):
-                for col_index in range(len(grid_state[line_index])):
+            tested_pos = []
+            for line_index in reversed(range(-1, len(grid_state))):
+                for col_index in range(-1, len(grid_state[line_index])):
                     translated_pos = []
+                    in_the_box = True
                     for pos in piece_rot_pos:
-                        translated_pos += [(pos[0] + line_index, pos[1] + col_index)]
-                    mov = self.is_reachable(piece, rot, grid_state, translated_pos)
-                    if mov:
-                        yield mov, self.apply_in_grid(grid_state, translated_pos)
+                        new_pos = (pos[0] + line_index, pos[1] + col_index)
+                        in_the_box &= 0 <= new_pos[0] < len(grid_state) \
+                            and 0 <= new_pos[1] < len(grid_state[line_index])
+                        translated_pos += [new_pos]
+                    if in_the_box:
+                        mov = self.is_reachable(piece, rot, grid_state, translated_pos, tested_pos)
+                        if mov is not None:
+                            yield mov, self.apply_in_grid(grid_state, translated_pos)
 
     def solve_for(self, queue: Queue,
                   grid_state: BoolGrid, movements: List[PieceMov]) -> Optional[List[PieceMov]]:
@@ -138,13 +154,13 @@ class PCFinder:
         if not queue:
             return
 
-        for i, piece in enumerate(queue):
-            for piece_movements, possible_grid_state in self.grids_after_placing(piece, grid_state):
-                res = self.solve_for(queue[i + 1:],
-                                     possible_grid_state,
-                                     movements + [piece_movements])
-                if res:
-                    return res
+        for piece_movements, possible_grid_state in self.grids_after_placing(queue[0], grid_state):
+            # TODO test parity to eliminate early
+            res = self.solve_for(queue[1:],
+                                 possible_grid_state,
+                                 movements + [piece_movements])
+            if res:
+                return res
 
     def solve(self, queue: Queue, grid_state: BoolGrid) -> Optional[Tuple[Queue, List[PieceMov]]]:
         """
@@ -167,6 +183,101 @@ class PCFinder:
 
 if __name__ == "__main__":
     pc_finder = PCFinder()
+
+    print(pc_finder.generate_possible_queue_combinations([1, 2, 3], 3))
+    print(pc_finder.generate_possible_queue_combinations([1, 2, 3, 4], 3))
+
+    grid = [
+        [False, False, False],
+        [False, True, True]
+    ]
+    print("minimal horizontal L solve",
+          pc_finder.solve([L_PIECE], grid))
+
+    grid = [
+       [False, False],
+       [False, False]
+    ]
+    print("minimal horizontal O solve",
+          pc_finder.solve([O_PIECE], grid))
+
+    grid = [
+        [False, False, False],
+        [True, True, False]
+    ]
+    print("minimal horizontal J solve",
+          pc_finder.solve([J_PIECE], grid))
+
+    grid = [
+        [False, False, False],
+        [True, False, True]
+    ]
+    print("minimal horizontal T solve",
+          pc_finder.solve([T_PIECE], grid))
+
+    grid = [
+        [False, False, False, False],
+    ]
+    print("minimal horizontal I solve",
+          pc_finder.solve([I_PIECE], grid))
+
+    grid = [
+        [True, False, False],
+        [False, False, True]
+    ]
+    print("minimal horizontal S solve",
+          pc_finder.solve([S_PIECE], grid))
+
+    grid = [
+        [False, False, True],
+        [True, False, False]
+    ]
+    print("minimal horizontal Z solve",
+          pc_finder.solve([Z_PIECE], grid))
+
+    grid = [
+        [False, False],
+        [False, True],
+        [False, True]
+    ]
+    print("minimal vertical J solve",
+          pc_finder.solve([J_PIECE], grid))
+
+    grid = [
+        [False, False],
+        [True, False],
+        [True, False]
+    ]
+    print("minimal horizontal L solve",
+          pc_finder.solve([L_PIECE], grid))
+
+    grid = [
+        [False],
+        [False],
+        [False],
+        [False]
+    ]
+    print("minimal vertical I solve",
+          pc_finder.solve([I_PIECE], grid))
+
+    grid = [
+        [True, False, False, False],
+        [True, False, False, True],
+        [True, False, True, True],
+        [False, False, True, True]
+    ]
+    print("180 JT solve",
+          pc_finder.solve([J_PIECE, T_PIECE], grid))
+
+    grid = [
+        [False, False, False, True],
+        [True, False, False, True],
+        [True, True, False, True],
+        [True, True, False, False]
+    ]
+    print("180 LT solve",
+          pc_finder.solve([L_PIECE, T_PIECE], grid))
+
     grid = [
         [True, True, True, True, False, False, False, False, True, True],
         [True, True, True, True, False, False, False, True, True, True],
@@ -188,5 +299,37 @@ if __name__ == "__main__":
         [True, True, True, False, False, False, True, True, True, True],
         [True, True, True, False, False, False, False, True, True, True]
     ]
-    print("no hold, 4 pieces solve",
-          pc_finder.solve([I_PIECE, I_PIECE, L_PIECE, O_PIECE], grid))
+    print("4 pieces solve",
+          pc_finder.solve([I_PIECE, J_PIECE, I_PIECE, L_PIECE, O_PIECE], grid))
+
+    grid = [
+        [True, False, False, False, False, False, False, False, False, False],
+        [True, True, False, False, False, True, False, False, False, False],
+        [True, True, True, True, True, True, False, False, False, False],
+        [True, True, True, True, True, True, False, False, False, False]
+    ]
+    print("6 pieces solve",
+          pc_finder.solve([L_PIECE, I_PIECE, O_PIECE, T_PIECE, J_PIECE, Z_PIECE, S_PIECE], grid))
+
+    import time
+    before = time.perf_counter()
+    grid = [
+        [False, False, True, True, False, False, False, False, False, False],
+        [False, True, True, False, False, False, False, False, False, False],
+        [False, True, True, True, False, False, False, False, False, False],
+        [True, True, True, True, True, False, False, False, False, False]
+    ]
+    print("7 pieces solve",
+          pc_finder.solve([L_PIECE, Z_PIECE, O_PIECE, T_PIECE, I_PIECE, S_PIECE, J_PIECE], grid))
+    print(time.perf_counter() - before)
+
+    grid = [
+        [False, False, False, False, False, False, False, False, False, False],
+        [False, False, False, False, False, False, False, False, False, False],
+        [False, False, False, False, False, False, False, False, False, False],
+        [False, False, False, False, False, False, False, False, False, False]
+    ]
+    print("11 pieces solve",
+          pc_finder.solve([T_PIECE, S_PIECE, Z_PIECE, L_PIECE, Z_PIECE, O_PIECE,
+                           T_PIECE, I_PIECE, S_PIECE, J_PIECE, I_PIECE],
+                          grid))
