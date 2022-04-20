@@ -19,22 +19,6 @@ class PCFinder:
         ...
 
     @staticmethod
-    def hash_grid(grid_to_hash: BoolGrid) -> int:
-        res = 0
-        for line in grid_to_hash:
-            for cell in line:
-                res = (res << 1) + int(cell)
-        return res
-
-    @staticmethod
-    def hash_piece_pos(piece: int, rotation: int, position: PiecePos) -> int:
-        res = ((piece << 8) + rotation << 8)
-        for pos in position:
-            res = (res << 4) + 8 + pos[0]
-            res = (res << 4) + 15 + pos[1]
-        return res
-
-    @staticmethod
     def generate_possible_queue_combinations(queue: Queue, res_size: int) -> List[Queue]:
         """
             Possible pieces order by user hold. Only generate queues of given size
@@ -73,6 +57,24 @@ class PCFinder:
             working_nodes = res + working_nodes
 
         return to_return
+
+    @staticmethod
+    def get_column_parity(grid_state: BoolGrid) -> int:
+        if not grid_state:
+            return 0
+
+        return sum(
+            sum(line[col] for col in range(0, len(grid_state[0]), 2))
+            for line in grid_state
+        ) % 2
+
+    @staticmethod
+    def get_full_board_column_parity(grid_state: BoolGrid) -> int:
+        if not grid_state:
+            return 0
+
+        line_n, col_n = len(grid_state), len(grid_state[0])
+        return (line_n * ((col_n % 2) + col_n // 2)) % 2
 
     def is_reachable(self, piece: int, rotation: int, grid_state: BoolGrid,
                      position: PiecePos,
@@ -154,8 +156,14 @@ class PCFinder:
         if not queue:
             return
 
+        grid_parity = self.get_column_parity(grid_state)
+        lj_count = sum(piece in (L_PIECE, J_PIECE) for piece in queue)
+        current_parity = (grid_parity + lj_count) % 2
+        if current_parity != self.get_full_board_column_parity(grid_state) and T_PIECE not in queue:
+            # no solution because cannot correct parity
+            return
+
         for piece_movements, possible_grid_state in self.grids_after_placing(queue[0], grid_state):
-            # TODO test parity to eliminate early
             res = self.solve_for(queue[1:],
                                  possible_grid_state,
                                  movements + [piece_movements])
@@ -191,65 +199,84 @@ if __name__ == "__main__":
         [False, False, False],
         [False, True, True]
     ]
+    import time
+    before = time.perf_counter()
     print("minimal horizontal L solve",
           pc_finder.solve([L_PIECE], grid))
+    print(time.perf_counter() - before)
 
     grid = [
        [False, False],
        [False, False]
     ]
+    before = time.perf_counter()
     print("minimal horizontal O solve",
           pc_finder.solve([O_PIECE], grid))
+    print(time.perf_counter() - before)
 
     grid = [
         [False, False, False],
         [True, True, False]
     ]
+    before = time.perf_counter()
     print("minimal horizontal J solve",
           pc_finder.solve([J_PIECE], grid))
+    print(time.perf_counter() - before)
 
     grid = [
         [False, False, False],
         [True, False, True]
     ]
+    before = time.perf_counter()
     print("minimal horizontal T solve",
           pc_finder.solve([T_PIECE], grid))
+    print(time.perf_counter() - before)
 
     grid = [
         [False, False, False, False],
     ]
+    before = time.perf_counter()
     print("minimal horizontal I solve",
           pc_finder.solve([I_PIECE], grid))
+    print(time.perf_counter() - before)
 
     grid = [
         [True, False, False],
         [False, False, True]
     ]
+    before = time.perf_counter()
     print("minimal horizontal S solve",
           pc_finder.solve([S_PIECE], grid))
+    print(time.perf_counter() - before)
 
     grid = [
         [False, False, True],
         [True, False, False]
     ]
+    before = time.perf_counter()
     print("minimal horizontal Z solve",
           pc_finder.solve([Z_PIECE], grid))
+    print(time.perf_counter() - before)
 
     grid = [
         [False, False],
         [False, True],
         [False, True]
     ]
+    before = time.perf_counter()
     print("minimal vertical J solve",
           pc_finder.solve([J_PIECE], grid))
+    print(time.perf_counter() - before)
 
     grid = [
         [False, False],
         [True, False],
         [True, False]
     ]
-    print("minimal horizontal L solve",
+    before = time.perf_counter()
+    print("minimal vertical L solve",
           pc_finder.solve([L_PIECE], grid))
+    print(time.perf_counter() - before)
 
     grid = [
         [False],
@@ -257,8 +284,10 @@ if __name__ == "__main__":
         [False],
         [False]
     ]
+    before = time.perf_counter()
     print("minimal vertical I solve",
           pc_finder.solve([I_PIECE], grid))
+    print(time.perf_counter() - before)
 
     grid = [
         [True, False, False, False],
@@ -266,8 +295,10 @@ if __name__ == "__main__":
         [True, False, True, True],
         [False, False, True, True]
     ]
+    before = time.perf_counter()
     print("180 JT solve",
           pc_finder.solve([J_PIECE, T_PIECE], grid))
+    print(time.perf_counter() - before)
 
     grid = [
         [False, False, False, True],
@@ -275,8 +306,10 @@ if __name__ == "__main__":
         [True, True, False, True],
         [True, True, False, False]
     ]
+    before = time.perf_counter()
     print("180 LT solve",
           pc_finder.solve([L_PIECE, T_PIECE], grid))
+    print(time.perf_counter() - before)
 
     grid = [
         [True, True, True, True, False, False, False, False, True, True],
@@ -284,14 +317,22 @@ if __name__ == "__main__":
         [True, True, True, True, False, False, True, True, True, True],
         [True, True, True, True, False, False, False, True, True, True]
     ]
+    before = time.perf_counter()
     print("No hold, no rotation, 3 pieces solve",
           pc_finder.solve([T_PIECE, S_PIECE, Z_PIECE], grid))
+    print(time.perf_counter() - before)
+    before = time.perf_counter()
     print("No rotation, 3 pieces solve",
           pc_finder.solve([Z_PIECE, T_PIECE, J_PIECE, L_PIECE], grid))
+    print(time.perf_counter() - before)
+    before = time.perf_counter()
     print("No hold, 3 pieces solve",
           pc_finder.solve([T_PIECE, J_PIECE, I_PIECE], grid))
+    print(time.perf_counter() - before)
+    before = time.perf_counter()
     print("3 pieces solve",
           pc_finder.solve([Z_PIECE, T_PIECE, J_PIECE, I_PIECE], grid))
+    print(time.perf_counter() - before)
 
     grid = [
         [True, True, True, False, False, False, False, False, True, True],
@@ -299,8 +340,10 @@ if __name__ == "__main__":
         [True, True, True, False, False, False, True, True, True, True],
         [True, True, True, False, False, False, False, True, True, True]
     ]
+    before = time.perf_counter()
     print("4 pieces solve",
           pc_finder.solve([I_PIECE, J_PIECE, I_PIECE, L_PIECE, O_PIECE], grid))
+    print(time.perf_counter() - before)
 
     grid = [
         [True, False, False, False, False, False, False, False, False, False],
@@ -308,17 +351,18 @@ if __name__ == "__main__":
         [True, True, True, True, True, True, False, False, False, False],
         [True, True, True, True, True, True, False, False, False, False]
     ]
+    before = time.perf_counter()
     print("6 pieces solve",
           pc_finder.solve([L_PIECE, I_PIECE, O_PIECE, T_PIECE, J_PIECE, Z_PIECE, S_PIECE], grid))
+    print(time.perf_counter() - before)
 
-    import time
-    before = time.perf_counter()
     grid = [
         [False, False, True, True, False, False, False, False, False, False],
         [False, True, True, False, False, False, False, False, False, False],
         [False, True, True, True, False, False, False, False, False, False],
         [True, True, True, True, True, False, False, False, False, False]
     ]
+    before = time.perf_counter()
     print("7 pieces solve",
           pc_finder.solve([L_PIECE, Z_PIECE, O_PIECE, T_PIECE, I_PIECE, S_PIECE, J_PIECE], grid))
     print(time.perf_counter() - before)
@@ -329,7 +373,9 @@ if __name__ == "__main__":
         [False, False, False, False, False, False, False, False, False, False],
         [False, False, False, False, False, False, False, False, False, False]
     ]
+    before = time.perf_counter()
     print("11 pieces solve",
           pc_finder.solve([T_PIECE, S_PIECE, Z_PIECE, L_PIECE, Z_PIECE, O_PIECE,
                            T_PIECE, I_PIECE, S_PIECE, J_PIECE, I_PIECE],
                           grid))
+    print(time.perf_counter() - before)
