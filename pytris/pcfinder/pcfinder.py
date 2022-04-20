@@ -15,8 +15,8 @@ class PCFinder:
     """
         PC Solver
     """
-    def __init__(self):
-        ...
+    def __init__(self, *, deep_drop: bool = False):
+        self.deep_drop = deep_drop
 
     @staticmethod
     def generate_possible_queue_combinations(queue: Queue, res_size: int) -> List[Queue]:
@@ -69,8 +69,15 @@ class PCFinder:
                 col_sums[col % 2] += int(line[col])
         return ((col_sums[0] - col_sums[1]) // 2) % 2
 
+    def is_placable(self, grid_state: BoolGrid, position: PiecePos) -> bool:
+        for pos in position:
+            if pos[0] >= len(grid_state) or pos[1] < 0 or pos[1] >= len(grid_state[0]) or \
+                    pos[0] >= 0 and grid_state[pos[0]][pos[1]]:
+                return False
+        return True
+
     def is_reachable(self, piece: int, rotation: int, grid_state: BoolGrid,
-                     position: PiecePos,
+                     position: PiecePos, final: bool,
                      tested_positions: List[PiecePos]) \
             -> Optional[PieceMov]:
         # no going back
@@ -89,23 +96,27 @@ class PCFinder:
             if pos[0] < 0:
                 high_enough = True
 
-        if high_enough:
+        if high_enough or self.deep_drop:
             return [position]
 
         # transposition
-        for t_line, t_column in ((-1, 0), (0, 1), (0, -1), (1, 0)):
+        for t_line, t_column in ((1, 0), (-1, 0), (0, 1), (0, -1)):
             transposed = [(line + t_line, column + t_column) for line, column in position]
-            res_reachable = self.is_reachable(piece, rotation,
-                                              grid_state, transposed, tested_positions)
-            if res_reachable is not None:
-                return res_reachable + [position]
+            if final and t_line == 1:
+                if self.is_placable(grid_state, transposed):
+                    return
+            else:
+                res_reachable = self.is_reachable(piece, rotation,
+                                                  grid_state, transposed, False, tested_positions)
+                if res_reachable is not None:
+                    return res_reachable + [position]
 
         # rotations
         for rot in (-1, 1, 2):
             res_cells = reverse_rotate(piece, position, grid_state, rotation, rot)
             if res_cells:
                 res_reachable = self.is_reachable(piece, (rotation - rot) % 4,
-                                                  grid_state, res_cells, tested_positions)
+                                                  grid_state, res_cells, False, tested_positions)
                 if res_reachable is not None:
                     return res_reachable + [position]
 
@@ -126,24 +137,21 @@ class PCFinder:
         return new_grid_state
 
     def grids_after_placing(self, piece: int, grid_state: BoolGrid) \
-            -> Iterable[Tuple[PieceMov, BoolGrid]]:
+            -> Iterable[Tuple[int, PiecePos, BoolGrid]]:
         rot_pos = PIECES_ROT[piece]
 
         for rot, piece_rot_pos in enumerate(rot_pos):
-            tested_pos = []
             for line_index in reversed(range(-1, len(grid_state))):
                 for col_index in range(-1, len(grid_state[line_index])):
-                    translated_pos = []
+                    translated_pos: PiecePos = []
                     in_the_box = True
                     for pos in piece_rot_pos:
                         new_pos = (pos[0] + line_index, pos[1] + col_index)
                         in_the_box &= 0 <= new_pos[0] < len(grid_state) \
                             and 0 <= new_pos[1] < len(grid_state[line_index])
                         translated_pos += [new_pos]
-                    if in_the_box:
-                        mov = self.is_reachable(piece, rot, grid_state, translated_pos, tested_pos)
-                        if mov is not None:
-                            yield mov, self.apply_in_grid(grid_state, translated_pos)
+                    if in_the_box and self.is_placable(grid_state, translated_pos):
+                        yield rot, translated_pos, self.apply_in_grid(grid_state, translated_pos)
 
     def solve_for(self, queue: Queue,
                   grid_state: BoolGrid, movements: List[PieceMov]) -> Optional[List[PieceMov]]:
@@ -160,12 +168,17 @@ class PCFinder:
             # no solution because cannot correct parity
             return
 
-        for piece_movements, possible_grid_state in self.grids_after_placing(queue[0], grid_state):
+        tested_pos = []
+
+        for piece_rot, piece_pos, possible_grid_state in self.grids_after_placing(queue[0], grid_state):
             res = self.solve_for(queue[1:],
                                  possible_grid_state,
-                                 movements + [piece_movements])
+                                 movements + [[piece_pos]])
             if res:
-                return res
+                mov = self.is_reachable(queue[0], piece_rot, grid_state, piece_pos, True, tested_pos)
+                if mov:
+                    res[res.index([piece_pos])] = mov
+                    return res
 
     def solve(self, queue: Queue, grid_state: BoolGrid) -> Optional[Tuple[Queue, List[PieceMov]]]:
         """
