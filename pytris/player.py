@@ -3,6 +3,7 @@ Player state on the board.
 
 Manage piece, hold, queue...
 """
+from multiprocessing.pool import ThreadPool, AsyncResult
 from typing import List
 
 import pygame
@@ -11,6 +12,7 @@ import pygame_gui.elements.ui_label
 from pytris.cell import Cell
 from pytris.grid import Grid
 from pytris.keymanager import KeyManager, Key
+from pytris.pcfinder.pcfinder import Queue, PieceMov, PCFinder
 from pytris.pieces import *
 from pytris.gamemode import *
 from pytris.playersettings import PlayerSettings
@@ -70,6 +72,8 @@ class Player(pygame.sprite.Sprite):
                  key_manager: KeyManager, settings: PlayerSettings, sound: SoundManager,
                  session: GameSession, game_mode: int, seed: str = None):
         super().__init__()
+        self._pool = ThreadPool(processes=1)
+
         self.player_ui_left = 0
         self.player_ui_top = 70
 
@@ -105,6 +109,12 @@ class Player(pygame.sprite.Sprite):
         self.sd: float = settings.sdf
         # used if sd >= 1
         self._sd_load = 0
+
+        self.replaying = False
+        self.replaying_future: AsyncResult = None
+        self.replay_queue: Queue = []
+        self.replay_moves: List[PieceMov] = []
+        self.replay_coordinate_shift = (0, 0)
 
         # position of the current piece's minos
         self._cells: List[(int, int)] = []
@@ -154,6 +164,13 @@ class Player(pygame.sprite.Sprite):
             "",
             gui_manager,
             object_id="perfect_clear"
+        )
+
+        self._searching_pc_textbox = pygame_gui.elements.UILabel(
+            pygame.Rect(self.player_ui_left + 120, self.player_ui_top + 180, 210, 50),
+            "",
+            gui_manager,
+            object_id="searching_pc"
         )
 
     @property
@@ -438,25 +455,45 @@ class Player(pygame.sprite.Sprite):
             self._cells = new_cells
             self._last_move = self.MOVE_TRANS
 
+    def _hold(self):
+        if self.session.hold_piece is None:
+            self.session.hold_piece = self.session.current_piece
+            self.session.set_next_in_queue()
+        else:
+            self.session.hold_piece, self.session.current_piece = \
+                self.session.current_piece, self.session.hold_piece
+        self.session.holt = True
+        self.sound.play_hold()
+        self.spawn_piece()
+
     def update(self, time_delta):
         """
             Update piece position following user input
         """
+        if self.replaying:
+            if self.replaying_future and self.replaying_future.ready():
+                res = self.replaying_future.get()
+                print(f"Solution : {res}")
+                self.replaying_future = None
+                if res:
+                    self.replay_queue, self.replay_moves = res
+                else:
+                    self.replaying = False
+                self._searching_pc_textbox.set_text("")
+            return
+
+        if self.game_mode == PC_TRAINING:
+            pressed = pygame.key.get_pressed()
+            if pressed[pygame.K_KP_ENTER]:
+                self.solve_board()
+
         self.session.update_time(time_delta)
 
         if self.locked:
             return
 
         if self._key_manager.pressed[Key.HOLD_KEY] and not self.session.holt:
-            if self.session.hold_piece is None:
-                self.session.hold_piece = self.session.current_piece
-                self.session.set_next_in_queue()
-            else:
-                self.session.hold_piece, self.session.current_piece = \
-                    self.session.current_piece, self.session.hold_piece
-            self.session.holt = True
-            self.sound.play_hold()
-            self.spawn_piece()
+            self._hold()
             return
 
         if self._key_manager.pressed[Key.HD_KEY]:
@@ -524,6 +561,23 @@ class Player(pygame.sprite.Sprite):
             f"{'T-spin mini ' if mini else ''}"
             f"{['', 'Single', 'Double', 'Triple', 'Quad'][cleared_lines]}").strip()
 
+        # play sounds
+        self.sound.play_lock()
+        if perfect:
+            self.sound.play_pc()
+        else:
+            if cleared_lines == 4:
+                self.sound.play_quad()
+            elif tspin or mini:
+                self.sound.play_tspin()
+            elif cleared_lines > 0:
+                self.sound.play_clear()
+
+        if self.replaying:
+            self.replay_coordinate_shift = (self.replay_coordinate_shift[0] + cleared_lines, 0)
+            return
+
+        # update stats
         if clear_type:
             self.session.stats[clear_type.strip()] += 1
             self.session.stats["Max Back-to-Back"] = max(self.session.stats["Max Back-to-Back"], self.session.back_to_back)
@@ -534,16 +588,9 @@ class Player(pygame.sprite.Sprite):
             if perfect:
                 score_key = f"{'B2B ' if self.session.back_to_back > 0 else ''}Perfect Clear {clear_type}"
                 score_to_add = self.SCORE_TABLE[score_key]
-                self.sound.play_pc()
             else:
                 b2b_mult = self.SCORE_TABLE["B2B"] if self.session.back_to_back > 0 else 1
                 score_to_add = b2b_mult * self.SCORE_TABLE[clear_type]
-                if cleared_lines == 4:
-                    self.sound.play_quad()
-                elif tspin or mini:
-                    self.sound.play_tspin()
-                elif cleared_lines > 0:
-                    self.sound.play_clear()
             self.session.score += int((score_to_add + combo_add) * self.session.level)
             if perfect:
                 self.session.stats["Perfect Clears"] += 1
@@ -551,7 +598,6 @@ class Player(pygame.sprite.Sprite):
                 self.session.successive_pc += 1
                 self.session.max_successive_pc = max(self.session.max_successive_pc, self.session.successive_pc)
         else:
-            self.sound.play_lock()
             if self.session.pieces_since_pc >= 10:
                 self.session.successive_pc = 0
 
@@ -566,10 +612,54 @@ class Player(pygame.sprite.Sprite):
         self.session.current_piece = None
         self.session.send_to_server()
 
+    def solve_board(self):
+        self.replaying = True
+        queue = []
+        if self.session.hold_piece is not None:
+            queue.append(self.session.hold_piece)
+        if self.session.current_piece is not None:
+            queue.append(self.session.current_piece)
+        queue += list(reversed(self.session.queue[-11 + len(queue):]))
+        converted_grid = []
+        for line in self.session.grid[-4:]:
+            converted_grid.append([cell != Cell.EMPTY for cell in line])
+        print(f"Solving grid for {queue}, {converted_grid}")
+        self.replay_coordinate_shift = (18, 0)
+        pc_finder = PCFinder()
+        self._searching_pc_textbox.set_text("SEARCHING FOR PC...")
+        self.replaying_future = self._pool.apply_async(pc_finder.solve, (queue, converted_grid))
+
+    def next_move_replay(self):
+        if self.replaying and self.replaying_future is None:
+            if not self.replay_queue:
+                self.replaying = False
+                return
+            piece = self.replay_queue[0]
+            moves = self.replay_moves[0]
+            if piece == self.session.current_piece:
+                if not moves:
+                    self.replay_queue = self.replay_queue[1:]
+                    self.replay_moves = self.replay_moves[1:]
+                    self.clear_lines()
+                    self.session.set_next_in_queue()
+                    self.spawn_piece()
+                else:
+                    move = moves[0]
+                    self.replay_moves[0] = moves[1:]
+                    new_cells = []
+                    for cell in move:
+                        new_cells.append((cell[0] + self.replay_coordinate_shift[0],
+                                          cell[1] + self.replay_coordinate_shift[1]))
+                    self._cells = new_cells
+            else:
+                self._hold()
+
     def go_down(self):
         """
             GODOWN with gravity
         """
+        if self.replaying:
+            return
         self._cells = self.grid.move(0, 1, self._cells)
         new_height = self._get_max_height(*self._cells)
         if new_height != self._current_height:
@@ -585,6 +675,8 @@ class Player(pygame.sprite.Sprite):
         """
             lock tick event
         """
+        if self.replaying:
+            return
         if self._is_on_top_of_something():
             if self._last_dir == 0:
                 self._locking_tick_unmoving_lock -= 1
@@ -658,6 +750,13 @@ class Player(pygame.sprite.Sprite):
                 f"<br>{self.session.used_pieces}"
                 f"<br><b>Time</b>"
                 f"<br>{self.time}"
+            )
+        elif self.game_mode == PC_TRAINING:
+            return (
+                f"<b>Perfect Clears</b>"
+                f"<br>{self.session.stats['Perfect Clears']}"
+                f"<br><b>Pieces</b>"
+                f"<br>{self.session.used_pieces}"
             )
         return ""
 

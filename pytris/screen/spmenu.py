@@ -10,7 +10,6 @@ from pygame.locals import *
 from pytris.gamemode import *
 from pytris.keymanager import KeyManager
 from pytris.playersettings import PlayerSettings
-from pytris.screen.options import OptionsWindow
 from pytris.soundmanager import SoundManager
 
 
@@ -29,6 +28,7 @@ class SPMenuScreen:
         self.sprint_button = None
         self.ultra_button = None
         self.pc_button = None
+        self.pc_training_button = None
         self.back_button = None
         self.game_mode = -1
         self.key_manager = key_manager
@@ -56,6 +56,11 @@ class SPMenuScreen:
             "PC MODE",
             self.gui_manager
         )
+        self.pc_training_button = pygame_gui.elements.UIButton(
+            pygame.Rect(self.size[0] // 2 - 60, 6 * (self.size[1] // 10), 100, 50),
+            "PC TRAINING",
+            self.gui_manager
+        )
         self.back_button = pygame_gui.elements.UIButton(
             pygame.Rect(10, 10, 70, 30),
             "BACK",
@@ -81,6 +86,9 @@ class SPMenuScreen:
                     elif event.ui_element == self.pc_button:
                         display_menu = False
                         self.game_mode = PC_MODE
+                    elif event.ui_element == self.pc_training_button:
+                        display_menu = False
+                        self.game_mode = PC_TRAINING
                     elif event.ui_element == self.back_button:
                         display_menu = False
                 if event.type == QUIT:
@@ -99,4 +107,5 @@ class SPMenuScreen:
         self.sprint_button.hide()
         self.ultra_button.hide()
         self.pc_button.hide()
+        self.pc_training_button.hide()
         self.back_button.hide()

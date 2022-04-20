@@ -219,7 +219,7 @@ class GameSession(ConnectionListener):
     def _reload_queue_and_randomizer(self):
         self.randomizer = random.Random(self.seed)
         for _ in range(self.piece_count):
-            if len(self.queue) < 8:
+            while len(self.queue) < 11:
                 self._add_next_bag_to_queue()
             self.queue.pop()
 
@@ -232,7 +232,7 @@ class GameSession(ConnectionListener):
         if start and self.current_piece is not None:
             # already a starting piece, no need to take next piece
             return
-        if len(self.queue) < 8:
+        while len(self.queue) < 11:
             self._add_next_bag_to_queue()
         self.current_piece = self.queue.pop()
         self.piece_count += 1

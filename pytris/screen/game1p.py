@@ -6,6 +6,7 @@ import sys
 import pygame
 from pygame.locals import *
 
+from pytris.gamemode import PC_TRAINING
 from pytris.keymanager import Key, KeyManager
 from pytris.player import Player
 from pytris.playersettings import PlayerSettings
@@ -32,6 +33,7 @@ class SinglePlayerGameScreen:
         self.sound = sound
         self.gravity_tick_event = pygame.event.custom_type()
         self.lock_tick_event = pygame.event.custom_type()
+        self.auto_replay_event = pygame.event.custom_type()
         self.session = GameSession() if session is None else session
         self.player = Player(self.gui_manager, self.km, self.settings, self.sound, self.session, self.game_mode)
         self._result_window = SinglePlayerResultWindow(size, window, display_surface, clock, gui_manager, self.player)
@@ -41,12 +43,15 @@ class SinglePlayerGameScreen:
         self._result_window.init_ui()
 
     def _run(self):
-        pygame.time.set_timer(self.gravity_tick_event, 1000)
+        if self.game_mode != PC_TRAINING:
+            pygame.time.set_timer(self.gravity_tick_event, 1000)
         pygame.time.set_timer(self.lock_tick_event, 500)
+        pygame.time.set_timer(self.auto_replay_event, 500)
         self.player.reset()
         self.player.start()
         go_down = False
         lock_tick = False
+        auto_replay = False
         reset = False
         time_delta = 0
 
@@ -59,6 +64,8 @@ class SinglePlayerGameScreen:
                     go_down = True
                 if event.type == self.lock_tick_event:
                     lock_tick = True
+                if event.type == self.auto_replay_event:
+                    auto_replay = True
                 if event.type == QUIT:
                     pygame.quit()
                     sys.exit()
@@ -94,6 +101,9 @@ class SinglePlayerGameScreen:
                     if lock_tick:
                         self.player.lock_tick()
                         lock_tick = False
+                    if auto_replay:
+                        self.player.next_move_replay()
+                        auto_replay = False
 
                 self.player.update(time_delta)
                 self.gui_manager.update(time_delta / 1000.0)

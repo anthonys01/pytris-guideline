@@ -52,6 +52,20 @@
              "text_shadow_size": "0"
          }
      },
+     "searching_pc":
+     {
+         "colours":
+         {
+             "normal_text": "#ffffff"
+         },
+         "font":
+         {
+             "name": "fira_code",
+             "size": "18",
+             "bold": "0",
+             "italic": "0"
+         }
+     },
     "button":
      {
          "colours":

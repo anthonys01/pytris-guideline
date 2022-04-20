@@ -63,18 +63,11 @@ class PCFinder:
         if not grid_state:
             return 0
 
-        return sum(
-            sum(line[col] for col in range(0, len(grid_state[0]), 2))
-            for line in grid_state
-        ) % 2
-
-    @staticmethod
-    def get_full_board_column_parity(grid_state: BoolGrid) -> int:
-        if not grid_state:
-            return 0
-
-        line_n, col_n = len(grid_state), len(grid_state[0])
-        return (line_n * ((col_n % 2) + col_n // 2)) % 2
+        col_sums = [0, len(grid_state) * (len(grid_state[0]) % 2)]
+        for line in grid_state:
+            for col in range(len(grid_state[0])):
+                col_sums[col % 2] += int(line[col])
+        return ((col_sums[0] - col_sums[1]) // 2) % 2
 
     def is_reachable(self, piece: int, rotation: int, grid_state: BoolGrid,
                      position: PiecePos,
@@ -86,14 +79,18 @@ class PCFinder:
 
         tested_positions.append(position)
 
-        for pos in position:
-            if pos[0] < 0:
-                return [position]
+        high_enough = False
 
-            if pos[0] < 0 or pos[0] >= len(grid_state) or \
-                    pos[1] < 0 or pos[1] >= len(grid_state[0]) or \
-                    grid_state[pos[0]][pos[1]]:
+        for pos in position:
+            if pos[0] >= len(grid_state) or pos[1] < 0 or pos[1] >= len(grid_state[0]) or \
+                    pos[0] >= 0 and grid_state[pos[0]][pos[1]]:
                 return
+
+            if pos[0] < 0:
+                high_enough = True
+
+        if high_enough:
+            return [position]
 
         # transposition
         for t_line, t_column in ((-1, 0), (0, 1), (0, -1), (1, 0)):
@@ -159,7 +156,7 @@ class PCFinder:
         grid_parity = self.get_column_parity(grid_state)
         lj_count = sum(piece in (L_PIECE, J_PIECE) for piece in queue)
         current_parity = (grid_parity + lj_count) % 2
-        if current_parity != self.get_full_board_column_parity(grid_state) and T_PIECE not in queue:
+        if current_parity != 0 and T_PIECE not in queue:
             # no solution because cannot correct parity
             return
 
@@ -192,6 +189,8 @@ class PCFinder:
 if __name__ == "__main__":
     pc_finder = PCFinder()
 
+    import time
+
     print(pc_finder.generate_possible_queue_combinations([1, 2, 3], 3))
     print(pc_finder.generate_possible_queue_combinations([1, 2, 3, 4], 3))
 
@@ -199,7 +198,6 @@ if __name__ == "__main__":
         [False, False, False],
         [False, True, True]
     ]
-    import time
     before = time.perf_counter()
     print("minimal horizontal L solve",
           pc_finder.solve([L_PIECE], grid))
@@ -379,3 +377,25 @@ if __name__ == "__main__":
                            T_PIECE, I_PIECE, S_PIECE, J_PIECE, I_PIECE],
                           grid))
     print(time.perf_counter() - before)
+
+    before = time.perf_counter()
+    print("11 pieces solve",
+          pc_finder.solve([L_PIECE, S_PIECE, O_PIECE, Z_PIECE, Z_PIECE, J_PIECE,
+                           T_PIECE, O_PIECE, S_PIECE, L_PIECE, I_PIECE],
+                          grid))
+    print(time.perf_counter() - before)
+
+    grid = [
+        [False, False, False, False, False, False, True, True, False, False],
+        [False, False, False, False, False, True, True, True, True, False],
+        [False, False, False, False, False, False, True, True, True, False],
+        [False, False, False, False, False, False, False, True, True, True]
+    ]
+
+    before = time.perf_counter()
+    print("8 pieces no solve",
+          pc_finder.solve([O_PIECE, I_PIECE, L_PIECE, Z_PIECE, J_PIECE,
+                           J_PIECE, I_PIECE, S_PIECE, T_PIECE, Z_PIECE, L_PIECE],
+                          grid))
+    print(time.perf_counter() - before)
+
