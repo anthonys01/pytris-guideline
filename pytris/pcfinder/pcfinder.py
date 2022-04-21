@@ -61,9 +61,10 @@ class PCFinder:
 
         return to_return
 
-    def generate_sub_queue(self, queue: Queue, sub_size: int, max_size: int)\
+    def generate_sub_queue(self, queue: Queue, sub_size: int)\
             -> Iterable[Tuple[Queue, List[int], Queue]]:
-        reduced = queue[:max_size]
+        max_size = len(queue)
+        reduced = queue[:]
         sub_filter = [0] * max_size
         for i in range(sub_size):
             sub_filter[i] = 1
@@ -134,19 +135,20 @@ class PCFinder:
                 if res_reachable is not None:
                     return res_reachable + [position]
 
-    def apply_in_grid(self, grid_state: BoolGrid, pos: PiecePos) -> BoolGrid:
+    def apply_in_grid(self, grid_state: BoolGrid, pos: PiecePos, clear: bool = True) -> BoolGrid:
         # apply and clear lines
         new_grid_state = [line[:] for line in grid_state]
         for cell in pos:
             new_grid_state[cell[0]][cell[1]] = True
 
-        to_delete = []
-        for line_index in reversed(range(len(new_grid_state))):
-            if sum(new_grid_state[line_index]) == len(new_grid_state[line_index]):
-                to_delete.append(line_index)
+        if clear:
+            to_delete = []
+            for line_index in reversed(range(len(new_grid_state))):
+                if sum(new_grid_state[line_index]) == len(new_grid_state[line_index]):
+                    to_delete.append(line_index)
 
-        for i in to_delete:
-            new_grid_state.remove(new_grid_state[i])
+            for i in to_delete:
+                new_grid_state.remove(new_grid_state[i])
 
         return new_grid_state
 
@@ -220,11 +222,38 @@ class PCFinder:
                     res[res.index([piece_pos])] = mov
                     return res
 
-    def get_left_queue(self, full_queue: Queue, used_queue: Queue) -> Queue:
-        queue = full_queue[:]
-        for piece in used_queue:
-            queue.remove(piece)
-        return queue
+    def verify_solution(self, queue: Queue, moves: List[PieceMov], grid_state: BoolGrid) -> bool:
+        grid_test = [line[:] for line in grid_state]
+        for i in range(len(queue)):
+            pos = moves[i][-1]
+            if not self.is_placable(grid_state, pos):
+                return False
+            grid_test = self.apply_in_grid(grid_test, pos)
+        return not grid_test
+
+    def colums_filled(self, grid_to_test: BoolGrid) -> int:
+        count = 0
+        line_nb = len(grid_to_test)
+        for col in range(len(grid_to_test[0])):
+            count += int(sum(line[col] for line in grid_to_test) == line_nb)
+        return count
+
+    def rejected_not_contained(self, current_grid: BoolGrid, rejected: List[int],
+                               queue: Queue, moves: List[PieceMov]) -> bool:
+        relevant = []
+        for r in rejected:
+            if r + 1 > len(queue):
+                continue
+            relevant.append(r + 1)
+        if relevant:
+            for i in range(1, len(queue) - 1):
+                for x in itertools.combinations(zip(queue, moves), i):
+                    grid_to_test = [line[:] for line in current_grid]
+                    for piece, move in x:
+                        grid_to_test = self.apply_in_grid(grid_to_test, move[-1], False)
+                    if self.colums_filled(grid_to_test) in relevant:
+                        return False
+        return True
 
     def solve(self, queue: Queue, grid_state: BoolGrid) -> Optional[Tuple[Queue, List[PieceMov]]]:
         """
@@ -242,35 +271,54 @@ class PCFinder:
             return
 
         possible_splits = []
-        current_unused = 0
-        for col in range(col_nb):
-            current_unused += line_nb - sum(line[col] for line in grid_state)
+        col_iter = list(range((col_nb + 1) // 2)) + [col_nb - 1]
+        if col_nb == 10:
+            if filled_cell == 0:
+                col_iter = (3, 4, 2, 1, 0, 9)
+            else:
+                col_iter = (3, 4, 2, 1, 0, 5, 6, 7, 8, 9)
+        for col in col_iter:
+            current_unused = line_nb * (col + 1) - sum(sum(line[:col + 1]) for line in grid_state)
             if current_unused % 4 == 0:
                 possible_splits.append(col)
         print(f"Found possible splits : {possible_splits}")
 
+        rejected_splits = []
         for split in possible_splits:
             print(f"Trying split {split}")
             sub_grid = [line[:split + 1] for line in grid_state]
             filled = sum(sum(line) for line in sub_grid)
             unused = line_nb * (split + 1) - filled
             sub_needed = unused // 4
-            for gen_queue in self.generate_possible_queue_combinations(queue, sub_needed):
-                res = self.solve_for(gen_queue, sub_grid, [])
-                if res:
-                    print("Found sub-solve")
-                    if split + 1 == col_nb:
-                        return gen_queue, res
 
-                    left = self.get_left_queue(queue, gen_queue)
-                    left_grid = [line[:] for line in grid_state]
-                    for line in left_grid:
-                        for col in range(split + 1):
-                            line[col] = True
-                    for gen_queue2 in self.generate_possible_queue_combinations(left, needed_pieces - sub_needed):
-                        res2 = self.solve_for(gen_queue2, left_grid, [])
-                        if res2:
-                            return gen_queue + gen_queue2, res + res2
+            for queue_with_hold in self.generate_possible_queue_combinations(queue, needed_pieces):
+                if split + 1 == col_nb:
+                    res = self.solve_for(queue_with_hold, grid_state, [])
+                    if res:
+                        return queue_with_hold, res
+                else:
+                    for sub_queue, mask, left_queue in self.generate_sub_queue(queue_with_hold, sub_needed):
+                        sub_sol = self.solve_for(sub_queue, sub_grid, [])
+                        if sub_sol and self.rejected_not_contained(sub_grid, rejected_splits, sub_queue, sub_sol):
+                            left_grid = [line[:] for line in grid_state]
+                            for line in left_grid:
+                                for col in range(split + 1):
+                                    line[col] = True
+                            full_solve = self.solve_for(left_queue, left_grid, [])
+                            if full_solve:
+                                moves = []
+                                for m in mask:
+                                    if m == 0:
+                                        moves.append(full_solve[0])
+                                        full_solve = full_solve[1:]
+                                    else:
+                                        moves.append(sub_sol[0])
+                                        sub_sol = sub_sol[1:]
+                                if self.verify_solution(queue_with_hold, moves, grid_state):
+                                    return queue_with_hold, moves
+                                else:
+                                    print("Un-split solution failed")
+                rejected_splits.append(split)
 
 
 if __name__ == "__main__":
