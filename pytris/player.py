@@ -484,7 +484,7 @@ class Player(pygame.sprite.Sprite):
 
         if self.game_mode == PC_TRAINING:
             pressed = pygame.key.get_pressed()
-            if pressed[pygame.K_KP_ENTER]:
+            if pressed[pygame.K_RETURN]:
                 self.solve_board()
 
         self.session.update_time(time_delta)
