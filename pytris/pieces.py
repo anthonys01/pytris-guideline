@@ -125,7 +125,7 @@ def rotate(piece: int, cells: List[Tuple[int, int]],
         for cell_pos in set(transposed_cells).difference(cells):
             if cell_pos[0] >= len(grid) or \
                 cell_pos[1] < 0 or cell_pos[1] >= len(grid[0]) or \
-                    grid[cell_pos[0]][cell_pos[1]]:
+                    cell_pos[0] >= 0 and grid[cell_pos[0]][cell_pos[1]]:
                 correct = False
                 break
         if correct:
