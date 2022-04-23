@@ -477,9 +477,10 @@ class Player(pygame.sprite.Sprite):
                 self.replaying_future = None
                 if res:
                     self.replay_queue, self.replay_moves = res
+                    self._searching_pc_textbox.set_text("")
                 else:
                     self.replaying = False
-                self._searching_pc_textbox.set_text("")
+                    self._searching_pc_textbox.set_text("NO PC FOUND")
             return
 
         if self.game_mode == PC_TRAINING:
@@ -538,6 +539,7 @@ class Player(pygame.sprite.Sprite):
         """
             Actions to do after a piece was locked
         """
+        self._searching_pc_textbox.set_text("")
         # write locked piece in grid
         self.grid.set_cell_type(self._cells, self.CELL[self.session.current_piece])
 
