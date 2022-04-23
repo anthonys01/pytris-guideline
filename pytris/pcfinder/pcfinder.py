@@ -1,11 +1,13 @@
 """
     Find PC sequences for given queue and board
 """
+import time
 import itertools
 from typing import List, Tuple, Optional, Iterable
 
 import more_itertools
 
+from pytris.pcfinder.node_grid import has_orphan_cells_after, has_orphan_cells
 from pytris.pieces import T_PIECE, Z_PIECE, L_PIECE, J_PIECE, S_PIECE, I_PIECE, O_PIECE, PIECES_ROT, reverse_rotate, \
     PIECES_ROT_MIN_MAX
 from pytris.typehints import BoolGrid, PiecePos
@@ -186,8 +188,13 @@ class PCFinder:
                             break
                         translated_pos += [new_pos]
                     if not pos_occupied:
-                        new_grid, skim = self.apply_in_grid(grid_state, translated_pos)
-                        yield rot, translated_pos, new_grid, skim
+                        if not has_orphan_cells_after(grid_state, translated_pos,
+                                                      (rot_pos_min_max[0][0] + line_index,
+                                                       rot_pos_min_max[0][1] + col_index),
+                                                      (rot_pos_min_max[1][0] + line_index,
+                                                       rot_pos_min_max[1][1] + col_index)):
+                            new_grid, skim = self.apply_in_grid(grid_state, translated_pos)
+                            yield rot, translated_pos, new_grid, skim
 
     def solve_for(self, queue: Queue, col_parity: int,
                   grid_state: BoolGrid, movements: List[PieceMov]) -> Optional[List[PieceMov]]:
@@ -281,6 +288,7 @@ class PCFinder:
         """
             Solve for given queue and grid state
         """
+        before = time.perf_counter()
         line_nb, col_nb = len(grid_state), len(grid_state[0])
         filled_cell = sum(sum(line) for line in grid_state)
         unused_cells = line_nb * col_nb - filled_cell
@@ -296,8 +304,14 @@ class PCFinder:
 
         if no_split:
             for queue_with_hold in self.generate_possible_queue_combinations(queue, needed_pieces):
+                if filled_cell == 0:
+                    ljt_sum = sum(piece in (L_PIECE, J_PIECE, T_PIECE) for piece in queue_with_hold)
+                    sz_sum = sum(piece in (S_PIECE, Z_PIECE) for piece in queue_with_hold)
+                    if sz_sum >= 2 and ljt_sum < 2:
+                        continue
                 res = self.solve_for(queue_with_hold, grid_parity, grid_state, [])
                 if res:
+                    print(time.perf_counter() - before)
                     return queue_with_hold, res
             return
 
@@ -330,8 +344,14 @@ class PCFinder:
 
             for queue_with_hold in self.generate_possible_queue_combinations(queue, needed_pieces):
                 if split + 1 == col_nb:
+                    if filled_cell == 0:
+                        ljt_sum = sum(piece in (L_PIECE, J_PIECE, T_PIECE) for piece in queue_with_hold)
+                        sz_sum = sum(piece in (S_PIECE, Z_PIECE) for piece in queue_with_hold)
+                        if sz_sum >= 2 and ljt_sum < 2:
+                            continue
                     res = self.solve_for(queue_with_hold, grid_parity, grid_state, [])
                     if res:
+                        print(time.perf_counter() - before)
                         return queue_with_hold, res
                 else:
                     if filled_cell == 0:
@@ -352,7 +372,8 @@ class PCFinder:
                                 continue
                         if filled_cell - filled == 0:
                             ljt_sum = sum(piece in (L_PIECE, J_PIECE, T_PIECE) for piece in left_queue)
-                            if S_PIECE in left_queue and Z_PIECE in left_queue and ljt_sum < 2:
+                            sz_sum = sum(piece in (S_PIECE, Z_PIECE) for piece in left_queue)
+                            if sz_sum >= 2 and ljt_sum < 2:
                                 continue
                         sub_sol = self.solve_for(sub_queue, sub_parity, sub_grid, [])
                         if sub_sol and self.rejected_not_contained(sub_grid, rejected_splits, sub_queue, sub_sol):
@@ -367,16 +388,16 @@ class PCFinder:
                                         moves.append(sub_sol[0])
                                         sub_sol = sub_sol[1:]
                                 if self.verify_solution(queue_with_hold, moves, grid_state):
+                                    print(time.perf_counter() - before)
                                     return queue_with_hold, moves
                                 else:
                                     print("Un-split solution failed")
                 rejected_splits.append(split)
+        print(time.perf_counter() - before)
 
 
 if __name__ == "__main__":
     pc_finder = PCFinder()
-
-    import time
 
     # print(pc_finder.generate_possible_queue_combinations([1, 2, 3], 3))
     # print(pc_finder.generate_possible_queue_combinations([1, 2, 3, 4], 3))
