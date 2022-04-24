@@ -112,6 +112,7 @@ class Player(pygame.sprite.Sprite):
 
         self.replaying = False
         self.replaying_future: AsyncResult = None
+        self.replay_solves = []
         self.replay_queue: Queue = []
         self.replay_moves: List[PieceMov] = []
         self.replay_coordinate_shift = (0, 0)
@@ -472,11 +473,10 @@ class Player(pygame.sprite.Sprite):
         """
         if self.replaying:
             if self.replaying_future and self.replaying_future.ready():
-                res = self.replaying_future.get()
-                print(f"Solution : {res}")
+                print(f"Solutions : {self.replay_solves}")
                 self.replaying_future = None
-                if res:
-                    self.replay_queue, self.replay_moves = res
+                if self.replay_solves:
+                    self.replay_queue, self.replay_moves = self.replay_solves[0]
                     self._searching_pc_textbox.set_text("")
                 else:
                     self.replaying = False
@@ -629,7 +629,8 @@ class Player(pygame.sprite.Sprite):
         self.replay_coordinate_shift = (18, 0)
         pc_finder = PCFinder()
         self._searching_pc_textbox.set_text("SEARCHING FOR PC...")
-        self.replaying_future = self._pool.apply_async(pc_finder.solve, (queue, converted_grid))
+        self.replay_solves = []
+        self.replaying_future = self._pool.apply_async(pc_finder.solve, (queue, converted_grid, self.replay_solves))
 
     def next_move_replay(self):
         if self.replaying and self.replaying_future is None:

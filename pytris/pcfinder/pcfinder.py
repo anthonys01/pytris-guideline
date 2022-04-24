@@ -197,12 +197,12 @@ class PCFinder:
                             yield rot, translated_pos, new_grid, skim
 
     def solve_for(self, queue: Queue, col_parity: int,
-                  grid_state: BoolGrid, movements: List[PieceMov]) -> Optional[List[PieceMov]]:
+                  grid_state: BoolGrid, movements: List[PieceMov], return_first: bool = True) -> List[List[PieceMov]]:
         if not grid_state:
-            return movements
+            return [movements]
 
         if not queue:
-            return
+            return []
 
         line_nb, col_nb = len(grid_state), len(grid_state[0])
 
@@ -210,7 +210,7 @@ class PCFinder:
         current_parity = (col_parity + lj_count) % 2
         if current_parity != 0 and T_PIECE not in queue:
             # no solution because cannot correct parity
-            return
+            return []
 
         if T_PIECE in queue[1:]:
             # set to -1 for it to be ignored
@@ -232,6 +232,7 @@ class PCFinder:
         if queue[0] in (L_PIECE, J_PIECE):
             new_parity = (col_parity + 1) % 2
 
+        all_solutions = []
         for piece_rot, piece_pos, possible_grid_state, skim in self.grids_after_placing(queue[0], grid_state,
                                                                                         line_nb, col_nb,
                                                                                         current_parity,
@@ -240,13 +241,20 @@ class PCFinder:
                 new_parity = (col_parity + 1) % 2
             res = self.solve_for(queue[1:], new_parity,
                                  possible_grid_state,
-                                 movements + [[piece_pos]])
+                                 movements + [[piece_pos]],
+                                 return_first)
             if res:
                 mov = self.is_reachable(queue[0], piece_rot, grid_state,
                                         line_nb, col_nb, piece_pos, True, tested_pos)
                 if mov:
-                    res[res.index([piece_pos])] = mov
-                    return res
+                    mov_index = res[0].index([piece_pos])
+                    for sol in res:
+                        sol[mov_index] = mov
+                    if return_first:
+                        return res
+                    else:
+                        all_solutions += res
+        return all_solutions
 
     def verify_solution(self, queue: Queue, moves: List[PieceMov], grid_state: BoolGrid) -> bool:
         grid_test = [line[:] for line in grid_state]
@@ -284,7 +292,8 @@ class PCFinder:
 
     four_boxes = [(0, 0, 0, 0), (0, 0, 3, 3), (0, 0, 3, 4), (0, 0, 4, 3), (0, 0, 4, 4), (0, 0, 5, 5), (0, 0, 6, 3), (0, 0, 6, 4), (0, 1, 3, 3), (0, 1, 3, 4), (0, 1, 6, 3), (0, 1, 6, 4), (0, 2, 4, 3), (0, 2, 4, 4), (0, 2, 6, 3), (0, 2, 6, 4), (0, 3, 0, 3), (0, 3, 0, 4), (0, 3, 1, 3), (0, 3, 1, 4), (0, 3, 2, 4), (0, 3, 3, 0), (0, 3, 3, 2), (0, 3, 3, 5), (0, 3, 3, 6), (0, 3, 4, 1), (0, 3, 4, 2), (0, 3, 4, 5), (0, 3, 4, 6), (0, 3, 5, 3), (0, 3, 5, 4), (0, 3, 6, 3), (0, 3, 6, 4), (0, 3, 6, 6), (0, 4, 0, 3), (0, 4, 0, 4), (0, 4, 1, 3), (0, 4, 2, 3), (0, 4, 2, 4), (0, 4, 3, 1), (0, 4, 3, 2), (0, 4, 3, 5), (0, 4, 3, 6), (0, 4, 4, 0), (0, 4, 4, 1), (0, 4, 4, 5), (0, 4, 4, 6), (0, 4, 5, 3), (0, 4, 5, 4), (0, 4, 6, 3), (0, 4, 6, 4), (0, 4, 6, 6), (0, 5, 0, 5), (0, 5, 3, 3), (0, 5, 3, 4), (0, 5, 4, 3), (0, 5, 4, 4), (0, 5, 5, 0), (0, 5, 6, 3), (0, 5, 6, 4), (0, 6, 0, 3), (0, 6, 0, 4), (0, 6, 1, 4), (0, 6, 2, 3), (0, 6, 3, 4), (0, 6, 3, 6), (0, 6, 4, 3), (0, 6, 4, 6), (0, 6, 5, 3), (0, 6, 5, 4), (0, 6, 6, 1), (0, 6, 6, 2), (0, 6, 6, 3), (0, 6, 6, 4), (0, 6, 6, 5), (1, 0, 3, 3), (1, 0, 3, 4), (1, 0, 6, 3), (1, 0, 6, 4), (1, 1, 3, 4), (1, 1, 4, 3), (1, 2, 6, 3), (1, 2, 6, 4), (1, 3, 0, 3), (1, 3, 0, 4), (1, 3, 4, 0), (1, 3, 6, 6), (1, 4, 1, 4), (1, 4, 3, 0), (1, 4, 4, 5), (1, 5, 3, 3), (1, 5, 6, 3), (1, 6, 0, 3), (1, 6, 0, 4), (1, 6, 2, 3), (1, 6, 3, 2), (1, 6, 3, 6), (1, 6, 4, 0), (1, 6, 6, 2), (1, 6, 6, 4), (1, 6, 6, 6), (2, 0, 4, 3), (2, 0, 4, 4), (2, 0, 6, 3), (2, 0, 6, 4), (2, 1, 6, 3), (2, 1, 6, 4), (2, 2, 3, 4), (2, 2, 4, 3), (2, 3, 2, 3), (2, 3, 3, 5), (2, 3, 4, 0), (2, 4, 0, 3), (2, 4, 0, 4), (2, 4, 3, 0), (2, 4, 6, 6), (2, 5, 4, 4), (2, 5, 6, 4), (2, 6, 0, 3), (2, 6, 0, 4), (2, 6, 1, 4), (2, 6, 3, 0), (2, 6, 4, 1), (2, 6, 4, 6), (2, 6, 6, 1), (2, 6, 6, 3), (2, 6, 6, 6), (3, 0, 0, 3), (3, 0, 0, 4), (3, 0, 1, 3), (3, 0, 1, 4), (3, 0, 2, 4), (3, 0, 3, 0), (3, 0, 3, 2), (3, 0, 3, 5), (3, 0, 3, 6), (3, 0, 4, 1), (3, 0, 4, 2), (3, 0, 4, 5), (3, 0, 4, 6), (3, 0, 5, 3), (3, 0, 5, 4), (3, 0, 6, 3), (3, 0, 6, 4), (3, 0, 6, 6), (3, 1, 0, 3), (3, 1, 0, 4), (3, 1, 3, 0), (3, 1, 4, 0), (3, 1, 5, 3), (3, 1, 6, 6), (3, 2, 0, 4), (3, 2, 2, 3), (3, 2, 3, 2), (3, 2, 3, 5), (3, 2, 4, 0), (3, 2, 5, 3), (3, 2, 5, 4), (3, 2, 6, 6), (3, 3, 0, 0), (3, 3, 0, 2), (3, 3, 0, 5), (3, 3, 1, 6), (3, 3, 2, 0), (3, 3, 2, 5), (3, 3, 3, 3), (3, 3, 3, 4), (3, 3, 4, 3), (3, 3, 4, 4), (3, 3, 5, 0), (3, 3, 5, 1), (3, 3, 5, 5), (3, 3, 6, 3), (3, 3, 6, 4), (3, 4, 0, 1), (3, 4, 0, 2), (3, 4, 0, 5), (3, 4, 0, 6), (3, 4, 1, 0), (3, 4, 1, 2), (3, 4, 1, 6), (3, 4, 2, 0), (3, 4, 2, 1), (3, 4, 2, 6), (3, 4, 3, 3), (3, 4, 3, 4), (3, 4, 4, 3), (3, 4, 4, 4), (3, 4, 5, 0), (3, 4, 5, 1), (3, 4, 5, 2), (3, 4, 6, 0), (3, 4, 6, 3), (3, 4, 6, 4), (3, 5, 0, 3), (3, 5, 0, 4), (3, 5, 1, 3), (3, 5, 2, 3), (3, 5, 2, 4), (3, 5, 3, 0), (3, 5, 3, 1), (3, 5, 3, 5), (3, 5, 3, 6), (3, 5, 4, 0), (3, 5, 5, 3), (3, 5, 5, 4), (3, 5, 6, 4), (3, 6, 0, 4), (3, 6, 0, 6), (3, 6, 1, 2), (3, 6, 2, 3), (3, 6, 2, 6), (3, 6, 3, 2), (3, 6, 3, 3), (3, 6, 3, 4), (3, 6, 4, 0), (3, 6, 4, 3), (3, 6, 4, 5), (3, 6, 5, 4), (3, 6, 6, 0), (3, 6, 6, 6), (4, 0, 0, 3), (4, 0, 0, 4), (4, 0, 1, 3), (4, 0, 2, 3), (4, 0, 2, 4), (4, 0, 3, 1), (4, 0, 3, 2), (4, 0, 3, 5), (4, 0, 3, 6), (4, 0, 4, 0), (4, 0, 4, 1), (4, 0, 4, 5), (4, 0, 4, 6), (4, 0, 5, 3), (4, 0, 5, 4), (4, 0, 6, 3), (4, 0, 6, 4), (4, 0, 6, 6), (4, 1, 0, 3), (4, 1, 1, 4), (4, 1, 3, 0), (4, 1, 4, 1), (4, 1, 4, 5), (4, 1, 5, 3), (4, 1, 5, 4), (4, 1, 6, 6), (4, 2, 0, 3), (4, 2, 0, 4), (4, 2, 3, 0), (4, 2, 4, 0), (4, 2, 5, 4), (4, 2, 6, 6), (4, 3, 0, 1), (4, 3, 0, 2), (4, 3, 0, 5), (4, 3, 0, 6), (4, 3, 1, 0), (4, 3, 1, 2), (4, 3, 1, 6), (4, 3, 2, 0), (4, 3, 2, 1), (4, 3, 2, 6), (4, 3, 3, 3), (4, 3, 3, 4), (4, 3, 4, 3), (4, 3, 4, 4), (4, 3, 5, 0), (4, 3, 5, 1), (4, 3, 5, 2), (4, 3, 6, 0), (4, 3, 6, 3), (4, 3, 6, 4), (4, 4, 0, 0), (4, 4, 0, 1), (4, 4, 0, 5), (4, 4, 1, 0), (4, 4, 1, 5), (4, 4, 2, 6), (4, 4, 3, 3), (4, 4, 3, 4), (4, 4, 4, 3), (4, 4, 4, 4), (4, 4, 5, 0), (4, 4, 5, 2), (4, 4, 5, 5), (4, 4, 6, 3), (4, 4, 6, 4), (4, 5, 0, 3), (4, 5, 0, 4), (4, 5, 1, 3), (4, 5, 1, 4), (4, 5, 2, 4), (4, 5, 3, 0), (4, 5, 4, 0), (4, 5, 4, 2), (4, 5, 4, 5), (4, 5, 4, 6), (4, 5, 5, 3), (4, 5, 5, 4), (4, 5, 6, 3), (4, 6, 0, 3), (4, 6, 0, 6), (4, 6, 1, 4), (4, 6, 1, 6), (4, 6, 2, 1), (4, 6, 3, 0), (4, 6, 3, 4), (4, 6, 3, 5), (4, 6, 4, 1), (4, 6, 4, 3), (4, 6, 4, 4), (4, 6, 5, 3), (4, 6, 6, 0), (4, 6, 6, 6), (5, 0, 0, 5), (5, 0, 3, 3), (5, 0, 3, 4), (5, 0, 4, 3), (5, 0, 4, 4), (5, 0, 5, 0), (5, 0, 6, 3), (5, 0, 6, 4), (5, 1, 3, 3), (5, 2, 4, 4), (5, 3, 0, 3), (5, 3, 0, 4), (5, 3, 3, 0), (5, 3, 3, 5), (5, 3, 3, 6), (5, 3, 4, 0), (5, 3, 5, 3), (5, 3, 5, 4), (5, 4, 0, 3), (5, 4, 0, 4), (5, 4, 3, 0), (5, 4, 4, 0), (5, 4, 4, 5), (5, 4, 4, 6), (5, 4, 5, 3), (5, 4, 5, 4), (5, 5, 0, 0), (5, 5, 3, 3), (5, 5, 3, 4), (5, 5, 4, 3), (5, 5, 4, 4), (5, 5, 5, 5), (5, 5, 6, 3), (5, 5, 6, 4), (5, 6, 0, 3), (5, 6, 0, 4), (5, 6, 3, 0), (5, 6, 3, 5), (5, 6, 3, 6), (5, 6, 4, 0), (5, 6, 4, 5), (5, 6, 4, 6), (5, 6, 5, 3), (5, 6, 5, 4), (6, 0, 0, 3), (6, 0, 0, 4), (6, 0, 1, 4), (6, 0, 2, 3), (6, 0, 3, 4), (6, 0, 3, 6), (6, 0, 4, 3), (6, 0, 4, 6), (6, 0, 5, 3), (6, 0, 5, 4), (6, 0, 6, 1), (6, 0, 6, 2), (6, 0, 6, 3), (6, 0, 6, 4), (6, 0, 6, 5), (6, 1, 0, 4), (6, 1, 2, 3), (6, 1, 3, 2), (6, 1, 3, 4), (6, 1, 4, 0), (6, 1, 4, 1), (6, 1, 6, 4), (6, 1, 6, 6), (6, 2, 0, 3), (6, 2, 1, 4), (6, 2, 3, 0), (6, 2, 3, 2), (6, 2, 4, 1), (6, 2, 4, 3), (6, 2, 6, 3), (6, 2, 6, 6), (6, 3, 0, 6), (6, 3, 1, 4), (6, 3, 2, 6), (6, 3, 3, 3), (6, 3, 3, 4), (6, 3, 3, 5), (6, 3, 4, 3), (6, 3, 6, 0), (6, 3, 6, 2), (6, 3, 6, 4), (6, 3, 6, 6), (6, 4, 0, 6), (6, 4, 1, 6), (6, 4, 2, 3), (6, 4, 3, 4), (6, 4, 4, 3), (6, 4, 4, 4), (6, 4, 4, 5), (6, 4, 6, 0), (6, 4, 6, 1), (6, 4, 6, 3), (6, 4, 6, 6), (6, 5, 0, 3), (6, 5, 0, 4), (6, 5, 3, 0), (6, 5, 3, 5), (6, 5, 3, 6), (6, 5, 4, 0), (6, 5, 4, 5), (6, 5, 4, 6), (6, 5, 5, 3), (6, 5, 5, 4), (6, 5, 6, 3), (6, 5, 6, 4), (6, 6, 0, 1), (6, 6, 0, 2), (6, 6, 0, 3), (6, 6, 0, 4), (6, 6, 0, 5), (6, 6, 1, 2), (6, 6, 1, 4), (6, 6, 2, 1), (6, 6, 2, 3), (6, 6, 3, 0), (6, 6, 3, 2), (6, 6, 3, 3), (6, 6, 3, 4), (6, 6, 4, 0), (6, 6, 4, 1), (6, 6, 4, 3), (6, 6, 4, 4), (6, 6, 5, 0), (6, 6, 5, 3), (6, 6, 5, 4), (6, 6, 6, 1), (6, 6, 6, 2), (6, 6, 6, 6)]
 
-    def solve(self, queue: Queue, grid_state: BoolGrid, no_split: bool = False) -> Optional[Tuple[Queue, List[PieceMov]]]:
+    def solve(self, queue: Queue, grid_state: BoolGrid, collect: List[Tuple[Queue, List[PieceMov]]],
+              no_split: bool = False, return_first: bool = True):
         """
             Solve for given queue and grid state
         """
@@ -311,8 +320,12 @@ class PCFinder:
                         continue
                 res = self.solve_for(queue_with_hold, grid_parity, grid_state, [])
                 if res:
-                    print(time.perf_counter() - before)
-                    return queue_with_hold, res
+                    for sol in res:
+                        collect.append((queue_with_hold, sol))
+                    if return_first:
+                        print(time.perf_counter() - before)
+                        return
+            print(time.perf_counter() - before)
             return
 
         possible_splits = []
@@ -349,10 +362,13 @@ class PCFinder:
                         sz_sum = sum(piece in (S_PIECE, Z_PIECE) for piece in queue_with_hold)
                         if sz_sum >= 2 and ljt_sum < 2:
                             continue
-                    res = self.solve_for(queue_with_hold, grid_parity, grid_state, [])
+                    res = self.solve_for(queue_with_hold, grid_parity, grid_state, [], return_first=False)
                     if res:
-                        print(time.perf_counter() - before)
-                        return queue_with_hold, res
+                        for sol in res:
+                            collect.append((queue_with_hold, sol))
+                        if return_first:
+                            print(time.perf_counter() - before)
+                            return
                 else:
                     if filled_cell == 0:
                         ljt_sum = sum(piece in (L_PIECE, J_PIECE, T_PIECE) for piece in queue_with_hold)
@@ -375,23 +391,37 @@ class PCFinder:
                             sz_sum = sum(piece in (S_PIECE, Z_PIECE) for piece in left_queue)
                             if sz_sum >= 2 and ljt_sum < 2:
                                 continue
-                        sub_sol = self.solve_for(sub_queue, sub_parity, sub_grid, [])
-                        if sub_sol and self.rejected_not_contained(sub_grid, rejected_splits, sub_queue, sub_sol):
-                            full_solve = self.solve_for(left_queue, left_parity, left_grid, [])
-                            if full_solve:
+                        sub_sols = self.solve_for(sub_queue, sub_parity, sub_grid, [], return_first)
+                        if not sub_sols:
+                            continue
+                        to_remove = []
+                        for sub_sol in sub_sols:
+                            if not self.rejected_not_contained(sub_grid, rejected_splits, sub_queue, sub_sol):
+                                to_remove.append(sub_sol)
+                        for to_rem in to_remove:
+                            sub_sols.remove(to_rem)
+
+                        full_solve = self.solve_for(left_queue, left_parity, left_grid, [], return_first)
+                        for sub_sol in sub_sols:
+                            for sol in full_solve:
+                                sub_sol_temp = sub_sol[:]
+                                sol_temp = sol[:]
                                 moves = []
                                 for m in mask:
                                     if m == 0:
-                                        moves.append(full_solve[0])
-                                        full_solve = full_solve[1:]
+                                        moves.append(sol_temp[0])
+                                        sol_temp = sol_temp[1:]
                                     else:
-                                        moves.append(sub_sol[0])
-                                        sub_sol = sub_sol[1:]
+                                        moves.append(sub_sol_temp[0])
+                                        sub_sol_temp = sub_sol_temp[1:]
                                 if self.verify_solution(queue_with_hold, moves, grid_state):
-                                    print(time.perf_counter() - before)
-                                    return queue_with_hold, moves
+                                    collect.append((queue_with_hold, moves))
+                                    if return_first:
+                                        print(time.perf_counter() - before)
+                                        return
                                 else:
                                     print("Un-split solution failed")
+
                 rejected_splits.append(split)
         print(time.perf_counter() - before)
 
@@ -597,10 +627,12 @@ if __name__ == "__main__":
 
     before = time.perf_counter()
     with cProfile.Profile() as pr:
-        res = pc_finder.solve([L_PIECE, S_PIECE, O_PIECE, Z_PIECE, Z_PIECE, J_PIECE,
-                               T_PIECE, O_PIECE, S_PIECE, L_PIECE, I_PIECE],
-                              grid)
+        res = []
+        pc_finder.solve([L_PIECE, S_PIECE, O_PIECE, Z_PIECE, Z_PIECE, J_PIECE,
+                         T_PIECE, O_PIECE, S_PIECE, L_PIECE, I_PIECE],
+                        grid, res)
         print("11 pieces solve", res)
+        print(f"Solve nb : {0 if not res else len(res)}")
     print(time.perf_counter() - before)
     stats = pstats.Stats(pr)
     stats.sort_stats(pstats.SortKey.TIME)
