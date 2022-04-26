@@ -260,6 +260,7 @@ class PCFinder:
                         if return_first:
                             return res
                         all_solutions += res
+                        break
         return all_solutions
 
     def verify_solution(self, queue: Queue, moves: List[PieceMov], grid_state: BoolGrid) -> bool:
