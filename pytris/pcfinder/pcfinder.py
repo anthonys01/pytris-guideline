@@ -7,7 +7,8 @@ from typing import List, Tuple, Optional, Iterable
 
 import more_itertools
 
-from pytris.pcfinder.node_grid import has_orphan_cells_after, has_orphan_cells
+from pytris.pcfinder.dependencies import get_dependency, get_dependencies
+from pytris.pcfinder.node_grid import get_cell_groups_after, has_orphan_cells
 from pytris.pieces import T_PIECE, Z_PIECE, L_PIECE, J_PIECE, S_PIECE, I_PIECE, O_PIECE, PIECES_ROT, reverse_rotate, \
     PIECES_ROT_MIN_MAX
 from pytris.typehints import BoolGrid, PiecePos
@@ -162,7 +163,7 @@ class PCFinder:
 
     def grids_after_placing(self, piece: int, grid_state: BoolGrid, line_nb: int, col_nb: int,
                             column_parity: int, ignore_left: int, ignore_right: int) \
-            -> Iterable[Tuple[List[int], PiecePos, BoolGrid, bool]]:
+            -> Iterable[Tuple[List[int], PiecePos, BoolGrid, bool, List[Tuple[int, int]]]]:
         rot_pos = PIECES_ROT[piece]
 
         if piece in (S_PIECE, Z_PIECE, I_PIECE):
@@ -191,24 +192,36 @@ class PCFinder:
                             break
                         translated_pos += [new_pos]
                     if not pos_occupied:
-                        if not has_orphan_cells_after(grid_state, translated_pos,
-                                                      (rot_pos_min_max[0][0] + line_index,
-                                                       rot_pos_min_max[0][1] + col_index),
-                                                      (rot_pos_min_max[1][0] + line_index,
-                                                       rot_pos_min_max[1][1] + col_index)):
+                        groups = get_cell_groups_after(grid_state, translated_pos,
+                                                       (rot_pos_min_max[0][0] + line_index,
+                                                        rot_pos_min_max[0][1] + col_index),
+                                                       (rot_pos_min_max[1][0] + line_index,
+                                                        rot_pos_min_max[1][1] + col_index))
+                        all_groups_valid = not groups or len(groups[0]) % 4 == 0
+                        if all_groups_valid:
+                            dependencies = []
+                            for group in groups:
+                                dependency = get_dependency(group)
+                                if dependency:
+                                    dependencies.append(dependency)
                             new_grid, skim = self.apply_in_grid(grid_state, translated_pos)
                             rots = [rot]
                             if piece in (S_PIECE, Z_PIECE, I_PIECE):
                                 rots = [rot, rot + 2]
-                            yield rots, translated_pos, new_grid, skim
+                            yield rots, translated_pos, new_grid, skim, dependencies
 
     def solve_for(self, queue: Queue, col_parity: int,
-                  grid_state: BoolGrid, movements: List[PieceMov], return_first: bool = True) -> List[List[PieceMov]]:
+                  grid_state: BoolGrid, movements: List[PieceMov],
+                  dependencies, return_first: bool = True) -> List[List[PieceMov]]:
         if not grid_state:
             return [movements]
 
         if not queue:
             return []
+
+        for dependency in dependencies:
+            if dependency[0] not in queue:
+                return []
 
         line_nb, col_nb = len(grid_state), len(grid_state[0])
 
@@ -239,15 +252,25 @@ class PCFinder:
             new_parity = (col_parity + 1) % 2
 
         all_solutions = []
-        for piece_rots, piece_pos, possible_grid_state, skim in self.grids_after_placing(queue[0], grid_state,
-                                                                                        line_nb, col_nb,
-                                                                                        current_parity,
-                                                                                        ignore_left, ignore_right):
+        for piece_rots, piece_pos, possible_grid_state, skim, deps in self.grids_after_placing(queue[0], grid_state,
+                                                                                               line_nb, col_nb,
+                                                                                               current_parity,
+                                                                                               ignore_left,
+                                                                                               ignore_right):
+            dep_missing = False
+            for dep in deps:
+                if dep[0] not in queue[1:]:
+                    dep_missing = True
+                    break
+            if dep_missing:
+                continue
+
             if queue[0] == T_PIECE and piece_rots[0] in (1, 3):
                 new_parity = (col_parity + 1) % 2
             res = self.solve_for(queue[1:], new_parity,
                                  possible_grid_state,
                                  movements + [[piece_pos]],
+                                 dependencies + deps,
                                  return_first)
             if res:
                 for piece_rot in piece_rots:
@@ -325,7 +348,7 @@ class PCFinder:
                     sz_sum = sum(piece in (S_PIECE, Z_PIECE) for piece in queue_with_hold)
                     if sz_sum >= 2 and ljt_sum < 2:
                         continue
-                res = self.solve_for(queue_with_hold, grid_parity, grid_state, [])
+                res = self.solve_for(queue_with_hold, grid_parity, grid_state, [], get_dependencies(grid_state))
                 if res:
                     for sol in res:
                         collect.append((queue_with_hold, sol))
@@ -369,7 +392,8 @@ class PCFinder:
                         sz_sum = sum(piece in (S_PIECE, Z_PIECE) for piece in queue_with_hold)
                         if sz_sum >= 2 and ljt_sum < 2:
                             continue
-                    res = self.solve_for(queue_with_hold, grid_parity, grid_state, [], return_first=False)
+                    res = self.solve_for(queue_with_hold, grid_parity, grid_state, [],
+                                         get_dependencies(grid_state), return_first=False)
                     if res:
                         for sol in res:
                             collect.append((queue_with_hold, sol))
@@ -398,7 +422,8 @@ class PCFinder:
                             sz_sum = sum(piece in (S_PIECE, Z_PIECE) for piece in left_queue)
                             if sz_sum >= 2 and ljt_sum < 2:
                                 continue
-                        sub_sols = self.solve_for(sub_queue, sub_parity, sub_grid, [], return_first)
+                        sub_sols = self.solve_for(sub_queue, sub_parity, sub_grid, [],
+                                                  get_dependencies(sub_grid), return_first=return_first)
                         if not sub_sols:
                             continue
                         to_remove = []
@@ -408,7 +433,8 @@ class PCFinder:
                         for to_rem in to_remove:
                             sub_sols.remove(to_rem)
 
-                        full_solve = self.solve_for(left_queue, left_parity, left_grid, [], return_first)
+                        full_solve = self.solve_for(left_queue, left_parity, left_grid, [],
+                                                    get_dependencies(left_grid), return_first=return_first)
                         for sub_sol in sub_sols:
                             for sol in full_solve:
                                 sub_sol_temp = sub_sol[:]

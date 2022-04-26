@@ -1,7 +1,7 @@
 """
     Node grid
 """
-from typing import List
+from typing import List, Set
 
 from pytris.typehints import BoolGrid, Cell, PiecePos
 
@@ -51,15 +51,39 @@ def has_orphan_cells(grid_state: BoolGrid) -> bool:
     return False
 
 
-def has_orphan_cells_after(grid_state: BoolGrid, piece_pos: PiecePos, min_pos, max_pos) -> bool:
+def get_cell_groups(grid_state: BoolGrid) -> List[Set[Cell]]:
     """
-        true if there is a group of cells that is not a multiple of 4 after placing piece
+        return all adjacent groups after the piece
     """
     if not grid_state:
-        return False
+        return []
+
+    line_nb, col_nb = len(grid_state), len((grid_state[0]))
+    tested = set()
+    groups = []
+
+    for line in range(line_nb):
+        for col in range(col_nb):
+            pos = (line, col)
+            if pos in tested:
+                continue
+            if grid_state[line][col]:
+                continue
+            group = set()
+            get_group(grid_state, line_nb, col_nb, pos, tested, group)
+    return groups
+
+
+def get_cell_groups_after(grid_state: BoolGrid, piece_pos: PiecePos, min_pos, max_pos) -> List[Set[Cell]]:
+    """
+        return all adjacent groups after the piece
+    """
+    if not grid_state:
+        return []
 
     line_nb, col_nb = len(grid_state), len((grid_state[0]))
     tested = set(piece_pos)
+    groups = []
 
     for line in range(max(min_pos[0] - 1, 0), min(max_pos[0] + 2, line_nb)):
         for col in range(max(min_pos[1] - 1, 0), min(max_pos[1] + 2, col_nb)):
@@ -71,7 +95,15 @@ def has_orphan_cells_after(grid_state: BoolGrid, piece_pos: PiecePos, min_pos, m
             group = set()
             get_group(grid_state, line_nb, col_nb, pos, tested, group)
             if len(group) % 4 != 0:
-                return True
+                return [group]
+            groups.append(group)
+    return groups
+
+
+def has_orphan_cells_after(grid_state: BoolGrid, piece_pos: PiecePos, min_pos, max_pos) -> bool:
+    for group in get_cell_groups_after(grid_state, piece_pos, min_pos, max_pos):
+        if len(group) % 4 != 0:
+            return True
     return False
 
 
@@ -83,8 +115,8 @@ if __name__ == "__main__":
         [True, True, False, False, False, False, False, False, False, True]
     ]
     print("should be False:", has_orphan_cells(grid))
-    print("should be False:", has_orphan_cells_after(grid, [(1, 4), (2, 4), (2, 5), (3, 4)]))
-    print("should be True:", has_orphan_cells_after(grid, [(1, 3), (2, 3), (2, 4), (3, 3)]))
+    print("should be False:", has_orphan_cells_after(grid, [(1, 4), (2, 4), (2, 5), (3, 4)], (1, 4), (3, 5)))
+    print("should be True:", has_orphan_cells_after(grid, [(1, 3), (2, 3), (2, 4), (3, 3)], (1, 3), (3, 4)))
 
     grid = [
         [True, True, True, True, False, False, False, False, False, True],
