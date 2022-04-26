@@ -162,8 +162,11 @@ class PCFinder:
 
     def grids_after_placing(self, piece: int, grid_state: BoolGrid, line_nb: int, col_nb: int,
                             column_parity: int, ignore_left: int, ignore_right: int) \
-            -> Iterable[Tuple[int, PiecePos, BoolGrid, bool]]:
+            -> Iterable[Tuple[List[int], PiecePos, BoolGrid, bool]]:
         rot_pos = PIECES_ROT[piece]
+
+        if piece in (S_PIECE, Z_PIECE, I_PIECE):
+            rot_pos = rot_pos[:2]
 
         authorized_rot = [0, 1, 2, 3]
         if piece == T_PIECE:
@@ -194,7 +197,10 @@ class PCFinder:
                                                       (rot_pos_min_max[1][0] + line_index,
                                                        rot_pos_min_max[1][1] + col_index)):
                             new_grid, skim = self.apply_in_grid(grid_state, translated_pos)
-                            yield rot, translated_pos, new_grid, skim
+                            rots = [rot]
+                            if piece in (S_PIECE, Z_PIECE, I_PIECE):
+                                rots = [rot, rot + 2]
+                            yield rots, translated_pos, new_grid, skim
 
     def solve_for(self, queue: Queue, col_parity: int,
                   grid_state: BoolGrid, movements: List[PieceMov], return_first: bool = True) -> List[List[PieceMov]]:
@@ -233,26 +239,26 @@ class PCFinder:
             new_parity = (col_parity + 1) % 2
 
         all_solutions = []
-        for piece_rot, piece_pos, possible_grid_state, skim in self.grids_after_placing(queue[0], grid_state,
+        for piece_rots, piece_pos, possible_grid_state, skim in self.grids_after_placing(queue[0], grid_state,
                                                                                         line_nb, col_nb,
                                                                                         current_parity,
                                                                                         ignore_left, ignore_right):
-            if queue[0] == T_PIECE and piece_rot in (1, 3):
+            if queue[0] == T_PIECE and piece_rots[0] in (1, 3):
                 new_parity = (col_parity + 1) % 2
             res = self.solve_for(queue[1:], new_parity,
                                  possible_grid_state,
                                  movements + [[piece_pos]],
                                  return_first)
             if res:
-                mov = self.is_reachable(queue[0], piece_rot, grid_state,
-                                        line_nb, col_nb, piece_pos, True, tested_pos)
-                if mov:
-                    mov_index = res[0].index([piece_pos])
-                    for sol in res:
-                        sol[mov_index] = mov
-                    if return_first:
-                        return res
-                    else:
+                for piece_rot in piece_rots:
+                    mov = self.is_reachable(queue[0], piece_rot, grid_state,
+                                            line_nb, col_nb, piece_pos, True, tested_pos)
+                    if mov:
+                        mov_index = res[0].index([piece_pos])
+                        for sol in res:
+                            sol[mov_index] = mov
+                        if return_first:
+                            return res
                         all_solutions += res
         return all_solutions
 
