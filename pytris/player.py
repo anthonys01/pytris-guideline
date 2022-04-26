@@ -116,6 +116,9 @@ class Player(pygame.sprite.Sprite):
         self.replay_queue: Queue = []
         self.replay_moves: List[PieceMov] = []
         self.replay_coordinate_shift = (0, 0)
+        self.grid_history = []
+        self.grid_index = 0
+        self.piece_history = []
 
         # position of the current piece's minos
         self._cells: List[(int, int)] = []
@@ -216,9 +219,15 @@ class Player(pygame.sprite.Sprite):
         self._damage_textbox.set_text("")
         self._combo_textbox.set_text("")
         self._perfect_clear_textbox.set_text("")
+        self.grid_history = []
+        self.piece_history = []
+        self.grid_index = 0
 
     def start(self):
         self.session.set_next_in_queue(start=True)
+        if self.game_mode == PC_TRAINING:
+            self.grid_history.append([line[:] for line in self.session.grid])
+            self.grid_index += 1
         self.spawn_piece()
 
     def game_finished(self) -> bool:
@@ -483,12 +492,34 @@ class Player(pygame.sprite.Sprite):
                     self._searching_pc_textbox.set_text("NO PC FOUND")
             return
 
-        if self.game_mode == PC_TRAINING:
-            pressed = pygame.key.get_pressed()
-            if pressed[pygame.K_RETURN]:
-                self.solve_board()
-
         self.session.update_time(time_delta)
+
+        if self.game_mode == PC_TRAINING:
+            if self._key_manager.pressed[Key.SOLVE_KEY]:
+                self.solve_board()
+                return
+            elif self._key_manager.pressing[Key.CTRL_KEY] and self._key_manager.pressed[Key.Z_KEY]:
+                if self.grid_index > 1:
+                    self.grid_index -= 1
+                    self.session.grid = [line[:] for line in self.grid_history[self.grid_index - 1]]
+                    if self.session.holt:
+                        self.session.hold_piece, self.session.current_piece = \
+                            self.session.current_piece, self.session.hold_piece
+                    self.session.queue.append(self.session.current_piece)
+                    self.session.hold_piece, self.session.current_piece = self.piece_history[self.grid_index - 1]
+                    self.session.piece_count -= 1
+                    self.spawn_piece()
+                    return
+            elif self._key_manager.pressing[Key.CTRL_KEY] and self._key_manager.pressed[Key.Y_KEY]:
+                if self.grid_index < len(self.grid_history):
+                    self.grid_index += 1
+                    self.session.grid = [line[:] for line in self.grid_history[self.grid_index - 1]]
+                    self.session.set_next_in_queue()
+                    self.session.holt = False
+                    if self.grid_index < len(self.grid_history) - 1:
+                        self.session.hold_piece, self.session.current_piece = self.piece_history[self.grid_index - 1]
+                    self.spawn_piece()
+                    return
 
         if self.locked:
             return
@@ -542,6 +573,15 @@ class Player(pygame.sprite.Sprite):
         self._searching_pc_textbox.set_text("")
         # write locked piece in grid
         self.grid.set_cell_type(self._cells, self.CELL[self.session.current_piece])
+        if self.game_mode == PC_TRAINING:
+            if self.grid_index < len(self.grid_history):
+                self.grid_history = self.grid_history[:self.grid_index]
+                self.piece_history = self.piece_history[:self.grid_index - 1]
+
+            if self.session.holt:
+                self.piece_history.append([self.session.current_piece, self.session.hold_piece])
+            else:
+                self.piece_history.append([self.session.hold_piece, self.session.current_piece])
 
         self.session.pieces_since_pc += 1
         tspin = self.is_tspin()
@@ -612,6 +652,9 @@ class Player(pygame.sprite.Sprite):
         self._combo_textbox.set_text(combo)
         self._perfect_clear_textbox.set_text("PERFECT CLEAR" if perfect else "")
         self.session.current_piece = None
+        if self.game_mode == PC_TRAINING:
+            self.grid_history.append([line[:] for line in self.session.grid])
+            self.grid_index += 1
         self.session.send_to_server()
 
     def solve_board(self):

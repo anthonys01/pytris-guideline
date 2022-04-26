@@ -24,6 +24,10 @@ class Key(str, Enum):
     HOLD_KEY = "hold"
     RESET_KEY = "reset"
     EXIT_KEY = "exit"
+    SOLVE_KEY = "solve"
+    CTRL_KEY = "CTRL"
+    Z_KEY = "Z"
+    Y_KEY = "Y"
 
 
 class KeyManager:
@@ -54,7 +58,8 @@ class KeyManager:
                 Key.ROT_180_KEY: K_m,
                 Key.HOLD_KEY: K_SPACE,
                 Key.RESET_KEY: K_BACKSPACE,
-                Key.EXIT_KEY: K_ESCAPE
+                Key.EXIT_KEY: K_ESCAPE,
+                Key.SOLVE_KEY: K_RETURN
             }
             print("No binding data was found, setting default values")
         else:
@@ -99,5 +104,15 @@ class KeyManager:
         """
         pressed_keys = pygame.key.get_pressed()
         for enum, key in self._enum_to_key_mapping.items():
-            self._just_pressed_keys[enum] = pressed_keys[key] and not self._pressing_keys[enum]
-            self._pressing_keys[enum] = pressed_keys[self._enum_to_key_mapping[enum]]
+            self._just_pressed_keys[enum] = pressed_keys[key] and \
+                                            (enum not in self._pressing_keys or not self._pressing_keys[enum])
+            self._pressing_keys[enum] = pressed_keys[key]
+        self._just_pressed_keys[Key.CTRL_KEY] = pressed_keys[K_LCTRL] and (
+                Key.CTRL_KEY not in self._pressing_keys or not self._pressing_keys[Key.CTRL_KEY])
+        self._pressing_keys[Key.CTRL_KEY] = pressed_keys[K_LCTRL]
+        self._just_pressed_keys[Key.Z_KEY] = pressed_keys[K_z] and (
+                Key.Z_KEY not in self._pressing_keys or not self._pressing_keys[Key.Z_KEY])
+        self._pressing_keys[Key.Z_KEY] = pressed_keys[K_z]
+        self._just_pressed_keys[Key.Y_KEY] = pressed_keys[K_y] and (
+                Key.Y_KEY not in self._pressing_keys or not self._pressing_keys[Key.Y_KEY])
+        self._pressing_keys[Key.Y_KEY] = pressed_keys[K_y]

@@ -128,6 +128,8 @@ class OptionsWindow:
         )
         i = 0
         for key in Key:
+            if key in (Key.CTRL_KEY, Key.Z_KEY, Key.Y_KEY):
+                continue
             pygame_gui.elements.UILabel(
                 pygame.Rect(10, 10 + 30 * i, 100, 30),
                 key,
