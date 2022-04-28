@@ -46,7 +46,7 @@ class SinglePlayerGameScreen:
         if self.game_mode != PC_TRAINING:
             pygame.time.set_timer(self.gravity_tick_event, 1000)
         pygame.time.set_timer(self.lock_tick_event, 500)
-        pygame.time.set_timer(self.auto_replay_event, 500)
+        pygame.time.set_timer(self.auto_replay_event, 250)
         self.player.reset()
         self.player.start()
         go_down = False

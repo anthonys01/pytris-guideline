@@ -112,7 +112,7 @@ class Player(pygame.sprite.Sprite):
 
         self.replaying = False
         self.replaying_future: AsyncResult = None
-        self.replay_solves = []
+        self.replay_solves = {}
         self.replay_queue: Queue = []
         self.replay_moves: List[PieceMov] = []
         self.replay_coordinate_shift = (0, 0)
@@ -485,7 +485,9 @@ class Player(pygame.sprite.Sprite):
                 print(f"Solutions : {self.replay_solves}")
                 self.replaying_future = None
                 if self.replay_solves:
-                    self.replay_queue, self.replay_moves = self.replay_solves[0]
+                    for _, sol in self.replay_solves.items():
+                        self.replay_queue, self.replay_moves = sol[0]
+                        break
                     self._searching_pc_textbox.set_text("")
                 else:
                     self.replaying = False
@@ -615,6 +617,10 @@ class Player(pygame.sprite.Sprite):
             elif cleared_lines > 0:
                 self.sound.play_clear()
 
+        if self.game_mode == PC_TRAINING:
+            self.grid_history.append([line[:] for line in self.session.grid])
+            self.grid_index += 1
+
         if self.replaying:
             self.replay_coordinate_shift = (self.replay_coordinate_shift[0] + cleared_lines, 0)
             return
@@ -652,9 +658,6 @@ class Player(pygame.sprite.Sprite):
         self._combo_textbox.set_text(combo)
         self._perfect_clear_textbox.set_text("PERFECT CLEAR" if perfect else "")
         self.session.current_piece = None
-        if self.game_mode == PC_TRAINING:
-            self.grid_history.append([line[:] for line in self.session.grid])
-            self.grid_index += 1
         self.session.send_to_server()
 
     def solve_board(self):
@@ -672,7 +675,7 @@ class Player(pygame.sprite.Sprite):
         self.replay_coordinate_shift = (18, 0)
         pc_finder = PCFinder()
         self._searching_pc_textbox.set_text("SEARCHING FOR PC...")
-        self.replay_solves = []
+        self.replay_solves = {}
         self.replaying_future = self._pool.apply_async(pc_finder.solve, (queue, converted_grid, self.replay_solves))
 
     def next_move_replay(self):
