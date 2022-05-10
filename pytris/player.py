@@ -4,18 +4,17 @@ Player state on the board.
 Manage piece, hold, queue...
 """
 from multiprocessing.pool import ThreadPool, AsyncResult
-from typing import List
 
 import pygame
 import pygame_gui.elements.ui_label
 
 from pytris.cell import Cell
-from pytris.grid import Grid
 from pytris.keymanager import KeyManager, Key
 from pytris.pcfinder.pcfinder import Queue, PieceMov, PCFinder
 from pytris.pieces import *
 from pytris.gamemode import *
 from pytris.playersettings import PlayerSettings
+from pytris.playerview import PlayerView
 from pytris.session import GameSession
 from pytris.soundmanager import SoundManager
 
@@ -74,8 +73,7 @@ class Player(pygame.sprite.Sprite):
         super().__init__()
         self._pool = ThreadPool(processes=1)
 
-        self.player_ui_left = 0
-        self.player_ui_top = 70
+        self.view = PlayerView(gui_manager, sound, session, game_mode)
 
         self.game_mode = game_mode
 
@@ -86,8 +84,6 @@ class Player(pygame.sprite.Sprite):
         self.sound = sound
         self._gui_manager = gui_manager
 
-        # grid with (X,Y) coordinates. X lines going down, Y columns going right
-        self.grid = Grid(self.player_ui_left + 95, self.player_ui_top, session)
         # if current piece is not movable by the player
         self.locked = False
 
@@ -142,41 +138,6 @@ class Player(pygame.sprite.Sprite):
         # last piece translation direction. 0 unmoving, negative left, positive right
         self._last_dir = 0
 
-        self._damage_textbox = pygame_gui.elements.UITextBox(
-            "",
-            pygame.Rect(self.player_ui_left, self.player_ui_top + 130, 90, 150), gui_manager)
-
-        self._combo_textbox = pygame_gui.elements.UITextBox(
-            "",
-            pygame.Rect(self.player_ui_left, self.player_ui_top + 280, 90, 50), gui_manager)
-
-        move = 60 if self.game_mode == ONLINE_CHILL_PC_MODE else 0
-        self._stats_textbox = pygame_gui.elements.UITextBox(
-            self._get_stats_text(),
-            pygame.Rect(self.player_ui_left, self.player_ui_top + 330 - move, 90, 300), gui_manager)
-
-        self._score_textbox = pygame_gui.elements.UITextBox(
-            self._get_score_text(),
-            pygame.Rect(self.player_ui_left + 360, self.player_ui_top + 400, 90, 90), gui_manager)
-
-        self._session_id_textbox = pygame_gui.elements.UITextBox(
-            "" if self.session.session_id is None else f"Session ID: {self.session.session_id}",
-            pygame.Rect(self.player_ui_left + 110, self.player_ui_top - 50, 250, 30), gui_manager)
-
-        self._perfect_clear_textbox = pygame_gui.elements.UILabel(
-            pygame.Rect(self.player_ui_left + 120, self.player_ui_top + 180, 200, 50),
-            "",
-            gui_manager,
-            object_id="perfect_clear"
-        )
-
-        self._searching_pc_textbox = pygame_gui.elements.UILabel(
-            pygame.Rect(self.player_ui_left + 120, self.player_ui_top + 180, 210, 50),
-            "",
-            gui_manager,
-            object_id="searching_pc"
-        )
-
     @property
     def topped_out(self):
         return self._topped_out
@@ -189,26 +150,11 @@ class Player(pygame.sprite.Sprite):
 
     @property
     def pps(self) -> str:
-        pps = 0
-        if self.session.timer > 0:
-            pps = 1000 * self.session.used_pieces / self.session.timer
-        return f"{pps:.2f}"
+        return self.view.pps
 
     @property
     def time(self) -> str:
-        if self.game_mode == ULTRA_MODE:
-            time_left = 120000 - self.session.timer
-            ms = time_left % 1000
-            total_secs = max(0, time_left // 1000)
-            minutes = total_secs // 60
-            secs = total_secs % 60
-            return f"{minutes:0>2}:{secs:0>2}.{ms:0>3}"
-        else:
-            ms = self.session.timer % 1000
-            total_secs = self.session.timer // 1000
-            minutes = total_secs // 60
-            secs = total_secs % 60
-            return f"{minutes:0>2}:{secs:0>2}.{ms:0>3}"
+        return self.view.time
 
     def reset(self):
         self.session.reset()
@@ -216,12 +162,10 @@ class Player(pygame.sprite.Sprite):
         self._arr_load = 0
         self._sd_load = 0
         self._topped_out = False
-        self._damage_textbox.set_text("")
-        self._combo_textbox.set_text("")
-        self._perfect_clear_textbox.set_text("")
         self.grid_history = []
         self.piece_history = []
         self.grid_index = 0
+        self.view.reset()
 
     def start(self):
         self.session.set_next_in_queue(start=True)
@@ -250,12 +194,15 @@ class Player(pygame.sprite.Sprite):
         :return: True if succeeded, False otherwise
         """
         spawn_cells = self._get_spawn_cells(self.session.current_piece)
+        self.view.spawn_piece(spawn_cells)
         for pos in spawn_cells:
-            if self.grid.get_cell(pos).cell_type != Cell.EMPTY:
+            if self.view.grid.get_cell(pos).cell_type != Cell.EMPTY:
                 self.topped_out = True
+                self.view.topped_out = True
                 return False
         if self.game_mode == PC_MODE and self.session.pieces_since_pc >= 10:
             self.topped_out = True
+            self.view.topped_out = True
             return False
         self._cells = spawn_cells
         self.locked = False
@@ -268,7 +215,7 @@ class Player(pygame.sprite.Sprite):
         return True
 
     def _is_on_top_of_something(self) -> bool:
-        return self._cells == self.grid.get_hd_pos(self._cells)
+        return self._cells == self.view.grid.get_hd_pos(self._cells)
 
     @staticmethod
     def _get_max_height(*cells) -> int:
@@ -293,7 +240,7 @@ class Player(pygame.sprite.Sprite):
             transposed_cells = [(cell_pos[0] - allowed_kicks[mode][1],
                                  cell_pos[1] + allowed_kicks[mode][0]) for cell_pos in new_cells]
             for cell_pos in set(transposed_cells).difference(self._cells):
-                cell = self.grid.get_cell(cell_pos)
+                cell = self.view.grid.get_cell(cell_pos)
                 if cell is None or cell.cell_type != Cell.EMPTY:
                     correct = False
                     break
@@ -317,7 +264,7 @@ class Player(pygame.sprite.Sprite):
 
         self._cells = new_cells
         self._rotation = new_rotation
-        self.sound.play_rotate()
+        self.view.rotate(self._cells)
 
     def is_tspin(self) -> bool:
         """
@@ -338,7 +285,7 @@ class Player(pygame.sprite.Sprite):
         ]
 
         def _is_used(cell_pos):
-            cell = self.grid.get_cell(cell_pos)
+            cell = self.view.grid.get_cell(cell_pos)
             return cell is None or cell.cell_type != Cell.EMPTY
 
         # 3 corners rule
@@ -381,22 +328,11 @@ class Player(pygame.sprite.Sprite):
         ]
 
         def _is_used(cell_pos):
-            cell = self.grid.get_cell(cell_pos)
+            cell = self.view.grid.get_cell(cell_pos)
             return cell is None or cell.cell_type != Cell.EMPTY
 
         # 3 corners rule
         return sum(_is_used(corner) for corner in corners) >= 3
-
-    def _hit_wall(self, cells) -> int:
-        """
-            -1 hit left wall, 0 don't hit wall, +1 hit right wall
-        """
-        for cell in cells:
-            if cell[0] == 0:
-                return -1
-            if cell[0] == self.grid.WIDTH - 1:
-                return 1
-        return 0
 
     def _translate(self):
         top = 0
@@ -454,16 +390,11 @@ class Player(pygame.sprite.Sprite):
                     self._sd_load = 0
         else:
             self._sd_load = 0
-        new_cells = self.grid.move(left, top, self._cells)
+        new_cells = self.view.grid.move(left, top, self._cells)
         if new_cells != self._cells:
-            if used_das:
-                self.sound.play_das()
-            elif used_arr:
-                self.sound.play_arr()
-            if self._hit_wall(self._cells) != self._hit_wall(new_cells):
-                self.sound.play_hit()
             self._cells = new_cells
             self._last_move = self.MOVE_TRANS
+            self.view.translate(self._cells, used_das, used_arr)
 
     def _hold(self):
         if self.session.hold_piece is None:
@@ -473,8 +404,8 @@ class Player(pygame.sprite.Sprite):
             self.session.hold_piece, self.session.current_piece = \
                 self.session.current_piece, self.session.hold_piece
         self.session.holt = True
-        self.sound.play_hold()
         self.spawn_piece()
+        self.view.hold()
 
     def update(self, time_delta):
         """
@@ -488,10 +419,10 @@ class Player(pygame.sprite.Sprite):
                     for _, sol in self.replay_solves.items():
                         self.replay_queue, self.replay_moves = sol[0]
                         break
-                    self._searching_pc_textbox.set_text("")
+                    self.view.searching_pc_textbox.set_text("")
                 else:
                     self.replaying = False
-                    self._searching_pc_textbox.set_text("NO PC FOUND")
+                    self.view.searching_pc_textbox.set_text("NO PC FOUND")
             return
 
         self.session.update_time(time_delta)
@@ -531,7 +462,7 @@ class Player(pygame.sprite.Sprite):
             return
 
         if self._key_manager.pressed[Key.HD_KEY]:
-            self._cells = self.grid.move(0, self.grid.HEIGHT, self._cells)
+            self._cells = self.view.grid.move(0, self.view.grid.HEIGHT, self._cells)
             height = self._get_max_height(*self._cells)
             self.session.score += self.SCORE_TABLE["HD"] * (height - self._current_height)
             self.locked = True
@@ -572,9 +503,8 @@ class Player(pygame.sprite.Sprite):
         """
             Actions to do after a piece was locked
         """
-        self._searching_pc_textbox.set_text("")
         # write locked piece in grid
-        self.grid.set_cell_type(self._cells, self.CELL[self.session.current_piece])
+        self.view.grid.set_cell_type(self._cells, self.CELL[self.session.current_piece])
         if self.game_mode == PC_TRAINING:
             if self.grid_index < len(self.grid_history):
                 self.grid_history = self.grid_history[:self.grid_index]
@@ -588,8 +518,8 @@ class Player(pygame.sprite.Sprite):
         self.session.pieces_since_pc += 1
         tspin = self.is_tspin()
         mini = False if tspin else self.is_tspin_mini()
-        cleared_lines = self.grid.clear_lines()
-        perfect = self.grid.is_board_empty()
+        cleared_lines = self.view.grid.clear_lines()
+        perfect = self.view.grid.is_board_empty()
         self.session.lines_cleared += cleared_lines
 
         if cleared_lines > 0:
@@ -605,17 +535,7 @@ class Player(pygame.sprite.Sprite):
             f"{'T-spin mini ' if mini else ''}"
             f"{['', 'Single', 'Double', 'Triple', 'Quad'][cleared_lines]}").strip()
 
-        # play sounds
-        self.sound.play_lock()
-        if perfect:
-            self.sound.play_pc()
-        else:
-            if cleared_lines == 4:
-                self.sound.play_quad()
-            elif tspin or mini:
-                self.sound.play_tspin()
-            elif cleared_lines > 0:
-                self.sound.play_clear()
+        self.view.clear_lines(cleared_lines, tspin, mini, perfect)
 
         if self.game_mode == PC_TRAINING:
             self.grid_history.append([line[:] for line in self.session.grid])
@@ -649,14 +569,6 @@ class Player(pygame.sprite.Sprite):
             if self.session.pieces_since_pc >= 10:
                 self.session.successive_pc = 0
 
-        back_to_back = f" {'Back-to-back ' + str(self.session.back_to_back) if self.session.back_to_back > 0 else ''}"
-        text = clear_type + back_to_back
-
-        combo = f"{str(self.session.combo) + ' REN' if self.session.combo > 0 else ''}"
-        text = text.strip()
-        self._damage_textbox.set_text(text)
-        self._combo_textbox.set_text(combo)
-        self._perfect_clear_textbox.set_text("PERFECT CLEAR" if perfect else "")
         self.session.current_piece = None
         self.session.send_to_server()
 
@@ -674,7 +586,7 @@ class Player(pygame.sprite.Sprite):
         print(f"Solving grid for {queue}, {converted_grid}")
         self.replay_coordinate_shift = (18, 0)
         pc_finder = PCFinder()
-        self._searching_pc_textbox.set_text("SEARCHING FOR PC...")
+        self.view.searching_pc_textbox.set_text("SEARCHING FOR PC...")
         self.replay_solves = {}
         self.replaying_future = self._pool.apply_async(pc_finder.solve, (queue, converted_grid, self.replay_solves))
 
@@ -700,6 +612,7 @@ class Player(pygame.sprite.Sprite):
                         new_cells.append((cell[0] + self.replay_coordinate_shift[0],
                                           cell[1] + self.replay_coordinate_shift[1]))
                     self._cells = new_cells
+                    self.view.cells = new_cells
             else:
                 self._hold()
 
@@ -709,7 +622,8 @@ class Player(pygame.sprite.Sprite):
         """
         if self.replaying:
             return
-        self._cells = self.grid.move(0, 1, self._cells)
+        self._cells = self.view.grid.move(0, 1, self._cells)
+        self.view.cells = self._cells
         new_height = self._get_max_height(*self._cells)
         if new_height != self._current_height:
             if new_height > self._max_height:
@@ -734,141 +648,8 @@ class Player(pygame.sprite.Sprite):
             if self._locking_tick_unmoving_lock <= 0 or self._locking_tick_moving_lock <= 0:
                 self.locked = True
 
-    def _draw_mini_piece(self, surface, cell_type: int, piece: int, pos_left: int, pos_top: int):
-        to_draw = Cell(cell_type)
-        bonus_shift = 0
-        if piece in (I_PIECE, O_PIECE):
-            bonus_shift = 5
-        for cell_pos in self._get_spawn_cells(piece):
-            rect = pygame.Rect(pos_left + cell_pos[1] * 14 - bonus_shift,
-                               pos_top + cell_pos[0] * 14,
-                               15, 15)
-            to_draw.draw(surface, rect)
-
-    def _get_stats_text(self) -> str:
-        if self.game_mode == FREE_PLAY_MODE:
-            return (
-                f"<br><br>"
-                f"<br><b>Lines</b>"
-                f"<br>{self.session.lines_cleared}"
-                f"<br><b>Time</b>"
-                f"<br>{self.time}"
-            )
-        elif self.game_mode == SPRINT_MODE:
-            pps = 0
-            if self.session.timer > 0:
-                pps = 1000 * self.session.used_pieces / self.session.timer
-            return (
-                f"<b>PPS</b>"
-                f"<br>{pps:.2f}"
-                f"<br><b>Lines</b>"
-                f"<br>{self.session.lines_cleared:0>2}/40"
-                f"<br><b>Time</b>"
-                f"<br>{self.time}"
-           )
-        elif self.game_mode == ULTRA_MODE:
-            pps = 0
-            if self.session.timer > 0:
-                pps = 1000 * self.session.used_pieces / self.session.timer
-            return (
-                f"<b>PPS</b>"
-                f"<br>{pps:.2f}"
-                f"<br><b>Lines</b>"
-                f"<br>{self.session.lines_cleared}"
-                f"<br><b>Time Left</b>"
-                f"<br>{self.time}"
-            )
-        elif self.game_mode == PC_MODE:
-            return (
-                f"<b>Perfect Clears</b>"
-                f"<br>{self.session.stats['Perfect Clears']}"
-                f"<br><b>Pieces</b>"
-                f"<br>{self.session.used_pieces}"
-                f"<br><b>Time</b>"
-                f"<br>{self.time}"
-            )
-        elif self.game_mode == ONLINE_CHILL_PC_MODE:
-            return (
-                f"<b>PCs</b>"
-                f"<br>{self.session.stats['Perfect Clears']}"
-                f"<br><b>Succ. PCs</b>"
-                f"<br>{self.session.successive_pc}"
-                f"<br><b>Max Succ. PCs</b>"
-                f"<br>{self.session.max_successive_pc}"
-                f"<br><b>Pieces</b>"
-                f"<br>{self.session.used_pieces}"
-                f"<br><b>Time</b>"
-                f"<br>{self.time}"
-            )
-        elif self.game_mode == PC_TRAINING:
-            return (
-                f"<b>Perfect Clears</b>"
-                f"<br>{self.session.stats['Perfect Clears']}"
-                f"<br><b>Pieces</b>"
-                f"<br>{self.session.used_pieces}"
-            )
-        return ""
-
-    def _get_score_text(self) -> str:
-        if self.game_mode in (ULTRA_MODE, ONLINE_CHILL_PC_MODE):
-            return (
-                f"<b>Score</b>"
-                f"<br>{self.session.score}"
-            )
-        return ""
-
     def draw(self, surface):
         """
             Draw the grid and its cells
         """
-        self._stats_textbox.set_text(self._get_stats_text())
-        self._score_textbox.set_text(self._get_score_text())
-
-        # GRID
-        self.grid.draw(surface, self.topped_out)
-
-        # HOLD
-        rect = pygame.Rect(self.grid.margin_left - 85, self.grid.margin_top, 73, 73)
-        pygame.draw.rect(surface, (20, 20, 20), rect)
-        pygame.draw.rect(surface, (60, 60, 60), rect, 2)
-        if self.session.hold_piece is not None:
-            self._draw_mini_piece(surface,
-                                  Cell.GARBAGE if self.session.holt else self.CELL[self.session.hold_piece],
-                                  self.session.hold_piece,
-                                  self.grid.margin_left - 112,
-                                  self.grid.margin_top + 20)
-
-        # PREVIEW
-        preview_left = self.grid.margin_left + self.grid.WIDTH * self.grid.block_size + 12
-        preview_top = self.grid.margin_top
-        rect = pygame.Rect(preview_left, preview_top, 73, 250)
-        pygame.draw.rect(surface, (20, 20, 20), rect)
-        pygame.draw.rect(surface, (60, 60, 60), rect, 2)
-        number = 0
-        for piece in self.session.get_preview():
-            number += 1
-            self._draw_mini_piece(surface,
-                                  self.CELL[piece],
-                                  piece,
-                                  preview_left - 28,
-                                  self.grid.margin_top - 24 + number * 45)
-
-        # piece
-        to_draw = Cell(self.CELL[self.session.current_piece])
-        if self.topped_out:
-            to_draw = Cell(Cell.GARBAGE)
-        for cell_pos in self._cells:
-            rect = pygame.Rect(self.grid.margin_left + cell_pos[1] * self.grid.block_size,
-                               self.grid.margin_top + cell_pos[0] * self.grid.block_size,
-                               self.grid.block_size + 1, self.grid.block_size + 1)
-            to_draw.draw(surface, rect)
-
-        # phantom
-        phantom = self.grid.get_hd_pos(self._cells)
-        if not set(phantom).intersection(self._cells):
-            phantom_cell = Cell(Cell.PHANTOM)
-            for cell_pos in phantom:
-                rect = pygame.Rect(self.grid.margin_left + cell_pos[1] * self.grid.block_size,
-                                   self.grid.margin_top + cell_pos[0] * self.grid.block_size,
-                                   self.grid.block_size + 1, self.grid.block_size + 1)
-                phantom_cell.draw(surface, rect)
+        self.view.draw(surface)
